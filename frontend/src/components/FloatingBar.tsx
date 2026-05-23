@@ -30,11 +30,11 @@ function FloatingBar() {
 
   return (
     <div
-      className="no-select bg-[#1b2636] rounded-xl px-3 py-1 shadow-lg flex items-center gap-2.5"
+      className="no-select bg-[#1b2636] rounded-xl px-2 py-1 shadow-lg flex items-center gap-2"
       style={{ '--wails-draggable': 'drag' } as React.CSSProperties}
     >
       {/* 左侧：状态指示 */}
-      <div className="flex items-center gap-1.5 shrink-0">
+      <div className="flex items-center gap-1 shrink-0">
         <span
           className="w-2 h-2 rounded-full transition-colors duration-300"
           style={{
@@ -50,17 +50,17 @@ function FloatingBar() {
       {/* 分隔 */}
       <span className="text-white/25 font-light text-xs">|</span>
 
-      {/* 中间：输入模式 + 音量条 */}
-      <div className="flex items-center gap-2 flex-1 min-w-0">
+      {/* 中间：输入模式 + 状态动画 */}
+      <div className="flex items-center gap-1.5 min-w-0">
         <span
-          className="text-xs px-1.5 py-0.5 rounded font-medium"
+          className="text-xs px-1 py-0.5 rounded font-medium"
           style={{ backgroundColor: modeColor + '22', color: modeColor }}
         >
           {modeLabel}
         </span>
 
         {appState === 'recording' && (
-          <div className="flex items-center gap-1.5">
+          <div className="flex items-center gap-1">
             <div className="flex items-end gap-px h-3">
               {Array.from({ length: 10 }).map((_, i) => (
                 <div
@@ -79,7 +79,7 @@ function FloatingBar() {
         )}
 
         {appState === 'recognizing' && (
-          <div className="flex items-center gap-1.5">
+          <div className="flex items-center gap-1">
             <span className="flex gap-0.5">
               {[0, 1, 2].map((i) => (
                 <span
@@ -91,12 +91,6 @@ function FloatingBar() {
             </span>
             <span className="text-slate-400 text-[10px]">识别中</span>
           </div>
-        )}
-
-        {appState === 'idle' && (
-          <span className="text-slate-500 text-[10px]">
-            {inputMode === 'voice' ? '快捷键' : '拼音'}输入
-          </span>
         )}
       </div>
 

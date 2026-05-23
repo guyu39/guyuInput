@@ -27,7 +27,24 @@ var defaults = map[string]string{
 	"floatbar_position": "center",
 	"auto_punctuation":  "true",
 	"record_hotkey":     "ctrl+alt+v",
-	"xunfei_app_id":     "",
+	// ASR 供应商选择
+		"asr_provider": "xunfei",
+		// 讯飞
+		"asr_xunfei_app_id":     "",
+		"asr_xunfei_api_key":    "",
+		"asr_xunfei_api_secret": "",
+		// 豆包
+		"asr_doubao_app_id":      "",
+		"asr_doubao_access_token": "",
+		// 阿里
+		"asr_alibaba_access_key_id":     "",
+		"asr_alibaba_access_key_secret": "",
+		"asr_alibaba_app_key":           "",
+		// MiniMax
+		"asr_minimax_api_key":  "",
+		"asr_minimax_group_id": "",
+		// 兼容旧 key
+		"xunfei_app_id":     "",
 	"xunfei_api_key":    "",
 	"xunfei_api_secret": "",
 	"first_run":         "true",

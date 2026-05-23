@@ -305,7 +305,7 @@ func (a *App) ShowWindow() {
 
 // CloseSettings 关闭设置面板，恢复悬浮窗尺寸
 func (a *App) CloseSettings() {
-	runtime.WindowSetSize(a.ctx, 280, 36)
+	runtime.WindowSetSize(a.ctx, 220, 36)
 	runtime.WindowCenter(a.ctx)
 }
 

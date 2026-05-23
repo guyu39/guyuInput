@@ -6,12 +6,55 @@ import {
   GetAudioDevices, SetAudioDevice,
   ImportDict, GetDictStats,
   GetHotkey, SetHotkey,
-  GetXunfeiCredentials, SetXunfeiCredentials, HasXunfeiCredentials,
 } from '../../wailsjs/go/main/App'
 
 interface Props {
   onClose: () => void
 }
+
+// 多供应商 API 字段定义
+interface ProviderDef {
+  key: string
+  name: string
+  fields: { id: string; label: string; secret?: boolean }[]
+}
+
+const PROVIDERS: ProviderDef[] = [
+  {
+    key: 'xunfei',
+    name: '讯飞',
+    fields: [
+      { id: 'app_id', label: 'App ID' },
+      { id: 'api_key', label: 'API Key' },
+      { id: 'api_secret', label: 'API Secret', secret: true },
+    ],
+  },
+  {
+    key: 'doubao',
+    name: '豆包',
+    fields: [
+      { id: 'app_id', label: 'App ID' },
+      { id: 'access_token', label: 'Access Token', secret: true },
+    ],
+  },
+  {
+    key: 'alibaba',
+    name: '阿里',
+    fields: [
+      { id: 'access_key_id', label: 'AccessKey ID' },
+      { id: 'access_key_secret', label: 'AccessKey Secret', secret: true },
+      { id: 'app_key', label: 'App Key' },
+    ],
+  },
+  {
+    key: 'minimax',
+    name: 'MiniMax',
+    fields: [
+      { id: 'api_key', label: 'API Key', secret: true },
+      { id: 'group_id', label: 'Group ID' },
+    ],
+  },
+]
 
 function SettingsPanel({ onClose }: Props) {
   const asrMode = useAppStore((s) => s.asrMode)
@@ -20,7 +63,6 @@ function SettingsPanel({ onClose }: Props) {
 
   const [audioDevices, setAudioDevices] = useState<{ id: string; name: string; is_default: boolean }[]>([])
   const [selectedDevice, setSelectedDevice] = useState('')
-  const [candidateCount, setCandidateCount] = useState('5')
   const [dictStats, setDictStats] = useState({ system_word_count: 0, user_word_count: 0, custom_word_count: 0, total_lookups: 0 })
 
   // 快捷键
@@ -29,12 +71,12 @@ function SettingsPanel({ onClose }: Props) {
   const hotkeyRef = useRef(hotkey)
   hotkeyRef.current = hotkey
 
-  // API 凭证
-  const [appID, setAppID] = useState('')
-  const [apiKey, setApiKey] = useState('')
-  const [apiSecret, setApiSecret] = useState('')
-  const [hasCreds, setHasCreds] = useState(false)
-  const [showSecret, setShowSecret] = useState(false)
+  // 多供应商 API
+  const [asrProvider, setAsrProvider] = useState('xunfei')
+  const [credsValues, setCredsValues] = useState<Record<string, string>>({})
+  const [showSecrets, setShowSecrets] = useState<Record<string, boolean>>({})
+
+  const currentProvider = PROVIDERS.find((p) => p.key === asrProvider) || PROVIDERS[0]
 
   // 导入词库路径
   const [importPath, setImportPath] = useState('')
@@ -45,19 +87,28 @@ function SettingsPanel({ onClose }: Props) {
 
   const loadAll = async () => {
     try {
-      const count = await GetConfig('candidate_count')
-      setCandidateCount(count || '5')
+      const provider = await GetConfig('asr_provider')
+      if (provider) setAsrProvider(provider)
     } catch (_) {}
+
+    // 加载所有供应商的凭证
+    const allValues: Record<string, string> = {}
+    for (const p of PROVIDERS) {
+      for (const f of p.fields) {
+        try {
+          const key = `asr_${p.key}_${f.id}`
+          const val = await GetConfig(key)
+          if (val) allValues[key] = val
+        } catch (_) {}
+      }
+    }
+    setCredsValues(allValues)
+
     try {
       const hk = await GetHotkey()
       if (hk) setHotkey(hk)
     } catch (_) {}
-    try {
-      const creds = await GetXunfeiCredentials()
-      setAppID(creds.app_id || '')
-      setApiKey(creds.api_key || '')
-      setHasCreds(await HasXunfeiCredentials())
-    } catch (_) {}
+
     try {
       const devices = await GetAudioDevices()
       setAudioDevices(devices || [])
@@ -69,6 +120,20 @@ function SettingsPanel({ onClose }: Props) {
       setDictStats(stats)
     } catch (_) {}
   }
+
+  // 获取当前供应商的凭证值
+  const getCredValue = (fieldId: string) => {
+    const key = `asr_${asrProvider}_${fieldId}`
+    return credsValues[key] || ''
+  }
+
+  const setCredValue = (fieldId: string, value: string) => {
+    const key = `asr_${asrProvider}_${fieldId}`
+    setCredsValues((prev) => ({ ...prev, [key]: value }))
+  }
+
+  // 当前供应商是否已配置（所有字段非空）
+  const hasProviderCreds = currentProvider.fields.every((f) => !!getCredValue(f.id))
 
   // ===== 快捷键录制 =====
   const handleHotkeyRecord = useCallback(() => {
@@ -88,7 +153,6 @@ function SettingsPanel({ onClose }: Props) {
       if (e.shiftKey) parts.push('shift')
       if (e.metaKey) parts.push('win')
 
-      // 忽略纯修饰键
       const key = e.key.toLowerCase()
       if (['control', 'alt', 'shift', 'meta'].includes(key)) return
 
@@ -120,9 +184,9 @@ function SettingsPanel({ onClose }: Props) {
     await SetConfig('asr_mode', mode)
   }
 
-  const handleCandidateCountChange = async (count: string) => {
-    setCandidateCount(count)
-    await SetConfig('candidate_count', count)
+  const handleProviderChange = async (key: string) => {
+    setAsrProvider(key)
+    await SetConfig('asr_provider', key)
   }
 
   const handleDeviceChange = async (id: string) => {
@@ -132,12 +196,18 @@ function SettingsPanel({ onClose }: Props) {
 
   const handleSaveCredentials = async () => {
     try {
-      await SetXunfeiCredentials(appID, apiKey, apiSecret)
-      setHasCreds(!!appID && !!apiKey && !!apiSecret)
-      toast('API 凭证已保存', 'success')
+      for (const f of currentProvider.fields) {
+        const key = `asr_${asrProvider}_${f.id}`
+        await SetConfig(key, getCredValue(f.id))
+      }
+      toast(`${currentProvider.name} API 凭证已保存`, 'success')
     } catch (e: any) {
       toast('保存失败: ' + e, 'error')
     }
+  }
+
+  const toggleSecret = (fieldId: string) => {
+    setShowSecrets((prev) => ({ ...prev, [fieldId]: !prev[fieldId] }))
   }
 
   const handleImportDict = async () => {
@@ -190,32 +260,60 @@ function SettingsPanel({ onClose }: Props) {
             </div>
           </Section>
 
-          {/* === API 凭证 === */}
-          <Section title="讯飞 API 凭证">
-            <div className="flex items-center gap-2 mb-2">
-              <span className={`w-2 h-2 rounded-full ${hasCreds ? 'bg-green-500' : 'bg-[#64748b]'}`} />
-              <span className="text-xs text-[#94a3b8]">{hasCreds ? '已配置' : '未配置'}</span>
-            </div>
-            <div className="space-y-2">
-              <InputField label="App ID" value={appID} onChange={setAppID} />
-              <InputField label="API Key" value={apiKey} onChange={setApiKey} />
-              <div className="flex gap-1 items-end">
-                <div className="flex-1">
-                  <InputField
-                    label="API Secret"
-                    value={apiSecret}
-                    onChange={setApiSecret}
-                    type={showSecret ? 'text' : 'password'}
-                  />
-                </div>
+          {/* === API 凭证（多供应商）=== */}
+          <Section title="语音 API 凭证">
+            {/* 供应商选择 */}
+            <div className="flex gap-1.5 mb-3 flex-wrap">
+              {PROVIDERS.map((p) => (
                 <button
-                  className="text-xs text-[#64748b] hover:text-[#94a3b8] pb-1.5"
-                  onClick={() => setShowSecret(!showSecret)}
+                  key={p.key}
+                  className={`px-3 py-1 rounded-lg text-xs transition-colors ${
+                    asrProvider === p.key
+                      ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30'
+                      : 'bg-white/5 text-[#94a3b8] border border-transparent hover:bg-white/10'
+                  }`}
+                  onClick={() => handleProviderChange(p.key)}
                 >
-                  {showSecret ? '隐藏' : '显示'}
+                  {p.name}
                 </button>
-              </div>
+              ))}
             </div>
+
+            {/* 配置状态指示 */}
+            <div className="flex items-center gap-2 mb-2">
+              <span className={`w-2 h-2 rounded-full ${hasProviderCreds ? 'bg-green-500' : 'bg-[#64748b]'}`} />
+              <span className="text-xs text-[#94a3b8]">
+                {currentProvider.name} — {hasProviderCreds ? '已配置' : '未配置'}
+              </span>
+            </div>
+
+            {/* 凭证字段 */}
+            <div className="space-y-2">
+              {currentProvider.fields.map((f) => {
+                const isSecret = f.secret && !showSecrets[f.id]
+                return (
+                  <div key={f.id} className="flex gap-1 items-end">
+                    <div className="flex-1">
+                      <InputField
+                        label={f.label}
+                        value={getCredValue(f.id)}
+                        onChange={(v) => setCredValue(f.id, v)}
+                        type={isSecret ? 'password' : 'text'}
+                      />
+                    </div>
+                    {f.secret && (
+                      <button
+                        className="text-xs text-[#64748b] hover:text-[#94a3b8] pb-1.5 shrink-0"
+                        onClick={() => toggleSecret(f.id)}
+                      >
+                        {isSecret ? '显示' : '隐藏'}
+                      </button>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+
             <button
               className="mt-2 px-3 py-1 rounded-lg text-xs bg-blue-500/15 text-blue-400 hover:bg-blue-500/25 transition-colors"
               onClick={handleSaveCredentials}
@@ -243,38 +341,13 @@ function SettingsPanel({ onClose }: Props) {
             </div>
           </Section>
 
-          {/* === 候选词数量 === */}
-          <Section title="候选词数量">
-            <div className="flex gap-2">
-              {['3', '5', '7', '9'].map((n) => (
-                <button
-                  key={n}
-                  className={`px-3 py-1.5 rounded-lg text-sm transition-colors ${
-                    candidateCount === n
-                      ? 'bg-blue-500 text-white'
-                      : 'bg-white/5 text-[#94a3b8] hover:bg-white/10'
-                  }`}
-                  onClick={() => handleCandidateCountChange(n)}
-                >
-                  {n} 个
-                </button>
-              ))}
-            </div>
-          </Section>
-
           {/* === 麦克风设备 === */}
           <Section title="麦克风设备">
-            <select
-              className="bg-white/5 text-white px-3 py-1.5 rounded-lg text-sm border border-white/10 w-full"
-              value={selectedDevice}
-              onChange={(e) => handleDeviceChange(e.target.value)}
-            >
-              {audioDevices.map((d) => (
-                <option key={d.id} value={d.id}>
-                  {d.name} {d.is_default ? '(默认)' : ''}
-                </option>
-              ))}
-            </select>
+            <DeviceSelect
+              devices={audioDevices}
+              selectedId={selectedDevice}
+              onChange={handleDeviceChange}
+            />
           </Section>
 
           {/* === 词库管理 === */}
@@ -337,6 +410,67 @@ function InputField({ label, value, onChange, type = 'text' }: {
       value={value}
       onChange={(e) => onChange(e.target.value)}
     />
+  )
+}
+
+/** 设备下拉选择 */
+function DeviceSelect({ devices, selectedId, onChange }: {
+  devices: { id: string; name: string; is_default: boolean }[]
+  selectedId: string
+  onChange: (id: string) => void
+}) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) {
+        setOpen(false)
+      }
+    }
+    if (open) document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [open])
+
+  const selected = devices.find((d) => d.id === selectedId)
+  const displayName = selected
+    ? `${selected.name}${selected.is_default ? ' (默认)' : ''}`
+    : '选择设备'
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        className="w-full bg-white/5 text-white text-xs px-3 py-1.5 rounded-lg border border-white/10 flex items-center justify-between gap-2 hover:border-white/20 transition-colors text-left"
+        onClick={() => setOpen(!open)}
+      >
+        <span className="truncate">{displayName}</span>
+        <svg className={`w-3 h-3 shrink-0 text-[#94a3b8] transition-transform ${open ? 'rotate-180' : ''}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <path d="M6 9l6 6 6-6" />
+        </svg>
+      </button>
+      {open && (
+        <div className="absolute left-0 right-0 top-full mt-1 bg-[#1e293b] border border-white/10 rounded-lg shadow-xl z-50 max-h-[180px] overflow-y-auto settings-scroll">
+          {devices.length === 0 ? (
+            <div className="px-3 py-2 text-xs text-[#64748b]">未检测到设备</div>
+          ) : (
+            devices.map((d) => (
+              <button
+                key={d.id}
+                className={`w-full text-left px-3 py-1.5 text-xs transition-colors ${
+                  d.id === selectedId
+                    ? 'bg-blue-500/15 text-blue-400'
+                    : 'text-[#e2e8f0] hover:bg-white/5'
+                }`}
+                onClick={() => { onChange(d.id); setOpen(false) }}
+              >
+                {d.name}
+                {d.is_default && <span className="text-[#64748b] ml-1">(默认)</span>}
+              </button>
+            ))
+          )}
+        </div>
+      )}
+    </div>
   )
 }
 

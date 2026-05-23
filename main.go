@@ -19,7 +19,7 @@ func main() {
 
 	err := wails.Run(&options.App{
 		Title:     "guyuInput",
-		Width:     280,
+		Width:     220,
 		Height:    36,
 		MinWidth:  100,
 		MinHeight: 36,

@@ -8,14 +8,27 @@ import (
 )
 
 var (
-	winmm       = syscall.NewLazyDLL("winmm.dll")
-	waveInOpen  = winmm.NewProc("waveInOpen")
-	waveInStart = winmm.NewProc("waveInStart")
-	waveInStop  = winmm.NewProc("waveInStop")
-	waveInReset = winmm.NewProc("waveInReset")
-	waveInClose = winmm.NewProc("waveInClose")
+	winmm            = syscall.NewLazyDLL("winmm.dll")
+	waveInOpen       = winmm.NewProc("waveInOpen")
+	waveInStart      = winmm.NewProc("waveInStart")
+	waveInStop       = winmm.NewProc("waveInStop")
+	waveInReset      = winmm.NewProc("waveInReset")
+	waveInClose      = winmm.NewProc("waveInClose")
 	waveInGetNumDevs = winmm.NewProc("waveInGetNumDevs")
+	waveInGetDevCaps = winmm.NewProc("waveInGetDevCapsW")
 )
+
+const maxPNameLen = 32
+
+type waveInCaps struct {
+	wMid          uint16
+	wPid          uint16
+	vDriverVersion uint32
+	szPname       [maxPNameLen]uint16
+	dwFormats     uint32
+	wChannels     uint16
+	wReserved1    uint16
+}
 
 const (
 	waveFormatPCM = 1
@@ -187,9 +200,15 @@ func (c *WindowsCapture) ListDevices() ([]Device, error) {
 
 	devices := make([]Device, 0, count)
 	for i := 0; i < count; i++ {
+		var caps waveInCaps
+		r, _, _ := waveInGetDevCaps.Call(uintptr(i), uintptr(unsafe.Pointer(&caps)), uintptr(unsafe.Sizeof(caps)))
+		name := fmt.Sprintf("麦克风 %d", i+1)
+		if r == mmSyserrNoerror {
+			name = syscall.UTF16ToString(caps.szPname[:])
+		}
 		devices = append(devices, Device{
 			ID:   fmt.Sprintf("%d", i),
-			Name: fmt.Sprintf("麦克风设备 %d", i+1),
+			Name: name,
 		})
 	}
 	if len(devices) > 0 {
