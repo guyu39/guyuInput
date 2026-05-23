@@ -1,52 +1,38 @@
-import { useState } from 'react'
 import { useAppStore } from './stores/appStore'
 import { useWailsEvents } from './hooks/useWailsEvents'
 import FloatingBar from './components/FloatingBar'
 import CandidateWindow from './components/CandidateWindow'
 import SettingsPanel from './components/SettingsPanel'
 import GuidePage from './components/GuidePage'
-import { MinimizeToTray } from '../wailsjs/go/main/App'
+import Toast from './components/Toast'
+import { CloseSettings } from '../wailsjs/go/main/App'
 
 function App() {
-  const [showSettings, setShowSettings] = useState(false)
+  const showSettings = useAppStore((s) => s.showSettings)
+  const setShowSettings = useAppStore((s) => s.setShowSettings)
   const showGuide = useAppStore((s) => s.showGuide)
 
-  // 注册所有 Wails 事件监听
   useWailsEvents()
 
+  const handleCloseSettings = () => {
+    setShowSettings(false)
+    CloseSettings()
+  }
+
   return (
-    <div id="App" className="h-screen bg-transparent">
-      {/* 主悬浮窗 + 候选词 */}
-      <div className="flex flex-col gap-1 p-2">
-        <FloatingBar />
-        <CandidateWindow />
-      </div>
+    <div id="App" className="h-screen flex flex-col items-center justify-center gap-0.5">
+      <FloatingBar />
+      <CandidateWindow />
 
-      {/* 底部按钮组 */}
-      <div className="flex justify-center gap-2 mt-1 px-2">
-        <button
-          className="text-[#64748b] hover:text-white text-xs px-2 py-1 rounded transition-colors"
-          onClick={() => setShowSettings(true)}
-        >
-          设置
-        </button>
-        <button
-          className="text-[#64748b] hover:text-white text-xs px-2 py-1 rounded transition-colors"
-          onClick={() => MinimizeToTray()}
-        >
-          最小化
-        </button>
-      </div>
-
-      {/* 设置面板（模态） */}
       {showSettings && (
-        <SettingsPanel onClose={() => setShowSettings(false)} />
+        <SettingsPanel onClose={handleCloseSettings} />
       )}
 
-      {/* 首次使用引导 */}
       {showGuide && (
         <GuidePage onComplete={() => useAppStore.getState().setShowGuide(false)} />
       )}
+
+      <Toast />
     </div>
   )
 }

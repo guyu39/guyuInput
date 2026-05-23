@@ -27,6 +27,9 @@ var defaults = map[string]string{
 	"floatbar_position": "center",
 	"auto_punctuation":  "true",
 	"record_hotkey":     "ctrl+alt+v",
+	"xunfei_app_id":     "",
+	"xunfei_api_key":    "",
+	"xunfei_api_secret": "",
 	"first_run":         "true",
 }
 

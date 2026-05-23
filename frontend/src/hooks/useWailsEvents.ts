@@ -7,6 +7,7 @@ export function useWailsEvents() {
   const setAppState = useAppStore((s) => s.setAppState)
   const setInputMode = useAppStore((s) => s.setInputMode)
   const setShowGuide = useAppStore((s) => s.setShowGuide)
+  const setShowSettings = useAppStore((s) => s.setShowSettings)
   const setCandidates = useInputStore((s) => s.setCandidates)
   const setASRPartial = useInputStore((s) => s.setASRPartial)
   const setASRFinal = useInputStore((s) => s.setASRFinal)
@@ -62,6 +63,12 @@ export function useWailsEvents() {
     unsubs.push(
       EventsOn('show-guide', (_: boolean) => {
         setShowGuide(true)
+      })
+    )
+
+    unsubs.push(
+      EventsOn('show-settings', (_: boolean) => {
+        setShowSettings(true)
       })
     )
 

@@ -18,6 +18,10 @@ export function ClearPinyinBuf() {
   return window['go']['main']['App']['ClearPinyinBuf']();
 }
 
+export function CloseSettings() {
+  return window['go']['main']['App']['CloseSettings']();
+}
+
 export function CommitCandidate(arg1) {
   return window['go']['main']['App']['CommitCandidate'](arg1);
 }
@@ -50,6 +54,10 @@ export function GetDictStats() {
   return window['go']['main']['App']['GetDictStats']();
 }
 
+export function GetHotkey() {
+  return window['go']['main']['App']['GetHotkey']();
+}
+
 export function GetInputMode() {
   return window['go']['main']['App']['GetInputMode']();
 }
@@ -64,6 +72,14 @@ export function GetVersion() {
 
 export function GetVolume() {
   return window['go']['main']['App']['GetVolume']();
+}
+
+export function GetXunfeiCredentials() {
+  return window['go']['main']['App']['GetXunfeiCredentials']();
+}
+
+export function HasXunfeiCredentials() {
+  return window['go']['main']['App']['HasXunfeiCredentials']();
 }
 
 export function ImportDict(arg1) {
@@ -100,6 +116,14 @@ export function SetAudioDevice(arg1) {
 
 export function SetConfig(arg1, arg2) {
   return window['go']['main']['App']['SetConfig'](arg1, arg2);
+}
+
+export function SetHotkey(arg1) {
+  return window['go']['main']['App']['SetHotkey'](arg1);
+}
+
+export function SetXunfeiCredentials(arg1, arg2, arg3) {
+  return window['go']['main']['App']['SetXunfeiCredentials'](arg1, arg2, arg3);
 }
 
 export function ShowWindow() {

@@ -3,8 +3,8 @@ package main
 import (
 	"context"
 
-	"guyuInput/internal/audio"
 	"guyuInput/internal/asr"
+	"guyuInput/internal/audio"
 	"guyuInput/internal/config"
 	"guyuInput/internal/dict"
 	"guyuInput/internal/hotkey"
@@ -12,21 +12,23 @@ import (
 	"guyuInput/internal/logger"
 	"guyuInput/internal/pinyin"
 	"guyuInput/internal/storage"
+	"guyuInput/internal/systray"
 
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
 // App 主应用结构体（Wails Bind 方法注册在此）
 type App struct {
-	ctx        context.Context
-	audioCap   audio.Capture
-	asrDisp    *asr.Dispatcher
-	pinyinEng  *pinyin.Engine
-	injector   *input.Injector
-	dispatcher *input.Dispatcher
-	configMgr  *config.Manager
-	hotkeyMgr  *hotkey.Manager
-	dictMgr    *dict.Manager
+	ctx          context.Context
+	audioCap     audio.Capture
+	asrDisp      *asr.Dispatcher
+	xunfeiClient *asr.XunfeiClient
+	pinyinEng    *pinyin.Engine
+	injector     *input.Injector
+	dispatcher   *input.Dispatcher
+	configMgr    *config.Manager
+	hotkeyMgr    *hotkey.Manager
+	dictMgr      *dict.Manager
 }
 
 // NewApp 创建 App 实例
@@ -56,11 +58,18 @@ func (a *App) startup(ctx context.Context) {
 	a.pinyinEng = pinyin.NewEngine(a.dictMgr)
 	a.hotkeyMgr = hotkey.NewManager()
 
-	// 在线 ASR（讯飞）
-	onlineASR := asr.NewXunfeiClient()
+	// 在线 ASR（讯飞），环境变量优先，配置兜底
+	a.xunfeiClient = asr.NewXunfeiClient()
+	if appID := a.configMgr.Get("xunfei_app_id"); appID != "" {
+		a.xunfeiClient.SetCredentials(
+			appID,
+			a.configMgr.Get("xunfei_api_key"),
+			a.configMgr.Get("xunfei_api_secret"),
+		)
+	}
 
 	// 离线 ASR（MVP 阶段暂不实装，V2.0）
-	a.asrDisp = asr.NewDispatcher(onlineASR, nil, asr.ModeAuto)
+	a.asrDisp = asr.NewDispatcher(a.xunfeiClient, nil, asr.ModeAuto)
 
 	// 输入模式调度器
 	a.dispatcher = input.NewDispatcher(a.audioCap, a.asrDisp, a.pinyinEng, a.injector)
@@ -87,21 +96,37 @@ func (a *App) startup(ctx context.Context) {
 		},
 	)
 
-	// 注册全局快捷键
-	a.hotkeyMgr.RegisterCtrlAltV(
-		func() { // 按下 → 开始录音
-			logger.Info("快捷键按下: 开始录音")
-			a.dispatcher.StartVoice()
-		},
-		func() { // 松开 → 停止录音
-			logger.Info("快捷键松开: 停止录音")
-			a.dispatcher.StopVoice()
-		},
-	)
+	// 注册全局快捷键（从配置读取）
+	hotkeyStr := a.configMgr.Get("record_hotkey")
+	voicePress := func() {
+		logger.Info("快捷键按下: 开始录音")
+		a.dispatcher.StartVoice()
+	}
+	voiceRelease := func() {
+		logger.Info("快捷键松开: 停止录音")
+		a.dispatcher.StopVoice()
+	}
+	if err := a.hotkeyMgr.ReregisterVoiceHotkey(hotkeyStr, voicePress, voiceRelease); err != nil {
+		logger.Errorf("快捷键注册失败: %v，回退到 Ctrl+Alt+V", err)
+		a.hotkeyMgr.RegisterCtrlAltV(voicePress, voiceRelease)
+	}
 
 	// 启动键盘钩子
 	if err := a.hotkeyMgr.Start(); err != nil {
 		logger.Errorf("键盘钩子启动失败: %v", err)
+	}
+
+	// 初始化系统托盘：左键显示窗口，右键菜单（设置/退出）
+	if err := systray.Init("build/windows/icon.ico",
+		func() { runtime.WindowShow(a.ctx) }, // 左键：显示窗口
+		func() { // 右键菜单 → 设置：放大窗口并打开设置面板
+			runtime.WindowSetSize(a.ctx, 480, 460)
+			runtime.WindowCenter(a.ctx)
+			runtime.EventsEmit(a.ctx, "show-settings", true)
+		},
+		func() { runtime.Quit(a.ctx) }, // 右键菜单 → 退出
+	); err != nil {
+		logger.Errorf("系统托盘初始化失败: %v", err)
 	}
 
 	// 如果不是首次运行，直接显示悬浮窗
@@ -115,6 +140,7 @@ func (a *App) startup(ctx context.Context) {
 // shutdown Wails 生命周期：应用关闭时调用
 func (a *App) shutdown(ctx context.Context) {
 	logger.Info("应用关闭")
+	systray.Quit()
 	a.hotkeyMgr.Stop()
 	a.asrDisp.Close()
 	storage.Close()
@@ -267,7 +293,7 @@ func (a *App) SetAudioDevice(id string) error {
 
 // ===================== 应用控制 =====================
 
-// MinimizeToTray 最小化到托盘
+// MinimizeToTray 隐藏窗口到托盘
 func (a *App) MinimizeToTray() {
 	runtime.WindowHide(a.ctx)
 }
@@ -275,6 +301,12 @@ func (a *App) MinimizeToTray() {
 // ShowWindow 显示窗口
 func (a *App) ShowWindow() {
 	runtime.WindowShow(a.ctx)
+}
+
+// CloseSettings 关闭设置面板，恢复悬浮窗尺寸
+func (a *App) CloseSettings() {
+	runtime.WindowSetSize(a.ctx, 280, 36)
+	runtime.WindowCenter(a.ctx)
 }
 
 // GetVersion 获取版本号
@@ -290,4 +322,52 @@ func (a *App) CompleteGuide() {
 // CheckFirstRun 检查是否首次运行
 func (a *App) CheckFirstRun() bool {
 	return a.configMgr.GetBool("first_run")
+}
+
+// ===================== 快捷键配置 =====================
+
+// GetHotkey 获取当前录音快捷键
+func (a *App) GetHotkey() string {
+	return a.configMgr.Get("record_hotkey")
+}
+
+// SetHotkey 设置录音快捷键（如 "ctrl+alt+v"）
+func (a *App) SetHotkey(hotkeyStr string) error {
+	_, _, err := hotkey.ParseHotkeyString(hotkeyStr)
+	if err != nil {
+		return err
+	}
+
+	if err := a.hotkeyMgr.ReregisterVoiceHotkey(hotkeyStr,
+		func() { a.dispatcher.StartVoice() },
+		func() { a.dispatcher.StopVoice() },
+	); err != nil {
+		return err
+	}
+
+	return a.configMgr.Set("record_hotkey", hotkeyStr)
+}
+
+// ===================== ASR API 凭证 =====================
+
+// GetXunfeiCredentials 获取讯飞 API 凭证
+func (a *App) GetXunfeiCredentials() map[string]string {
+	appID, apiKey, _ := a.xunfeiClient.GetCredentials()
+	return map[string]string{
+		"app_id":  appID,
+		"api_key": apiKey,
+	}
+}
+
+// SetXunfeiCredentials 设置讯飞 API 凭证
+func (a *App) SetXunfeiCredentials(appID, apiKey, secret string) {
+	a.xunfeiClient.SetCredentials(appID, apiKey, secret)
+	a.configMgr.Set("xunfei_app_id", appID)
+	a.configMgr.Set("xunfei_api_key", apiKey)
+	a.configMgr.Set("xunfei_api_secret", secret)
+}
+
+// HasXunfeiCredentials 检查讯飞凭证是否已配置
+func (a *App) HasXunfeiCredentials() bool {
+	return a.xunfeiClient.HasCredentials()
 }

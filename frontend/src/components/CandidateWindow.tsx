@@ -1,11 +1,21 @@
+import { useEffect, useState } from 'react'
 import { useInputStore } from '../stores/inputStore'
 import { useAppStore } from '../stores/appStore'
-import { SelectCandidate, CommitCandidate, ClearPinyinBuf, ProcessKey } from '../../wailsjs/go/main/App'
+import { SelectCandidate, ClearPinyinBuf } from '../../wailsjs/go/main/App'
 
 function CandidateWindow() {
   const pinyin = useInputStore((s) => s.pinyin)
   const candidates = useInputStore((s) => s.candidates)
   const inputMode = useAppStore((s) => s.inputMode)
+  const [visible, setVisible] = useState(false)
+
+  useEffect(() => {
+    if (inputMode === 'keyboard' && pinyin) {
+      setVisible(true)
+    } else {
+      setVisible(false)
+    }
+  }, [inputMode, pinyin])
 
   if (inputMode !== 'keyboard' || !pinyin) {
     return null
@@ -15,48 +25,47 @@ function CandidateWindow() {
     SelectCandidate(index + 1)
   }
 
-  const handleBackspace = () => {
-    ProcessKey('\b')
-  }
-
-  const handleClear = () => {
-    ClearPinyinBuf()
-  }
-
   return (
-    <div className="no-select bg-[#1b2636]/95 backdrop-blur rounded-lg px-3 py-2 min-w-[200px] border border-white/10 shadow-lg">
-      {/* 拼音显示 */}
-      <div className="flex items-center justify-between mb-1.5">
-        <span className="text-[#94a3b8] text-sm">{pinyin || ' '}</span>
-        <button
-          className="text-[#94a3b8] hover:text-white text-xs px-1"
-          onClick={handleClear}
-        >
-          ✕
-        </button>
-      </div>
+    <div
+      className={`no-select bg-[#1b2636] rounded-lg px-2.5 py-1 shadow-lg flex items-center gap-1.5 transition-all duration-150 ${
+        visible ? 'opacity-100 scale-100' : 'opacity-0 scale-95'
+      }`}
+    >
+      {/* 拼音 + 闪烁光标 */}
+      <span className="text-slate-300 text-xs flex items-center gap-px">
+        {pinyin}
+        <span className="w-px h-3 bg-blue-400 animate-pulse ml-0.5" />
+      </span>
 
-      {/* 候选词列表 */}
+      <span className="text-white/25 text-xs font-light">|</span>
+
       {candidates.length > 0 ? (
-        <div className="flex flex-wrap gap-1">
+        <div className="flex gap-0.5">
           {candidates.map((word, i) => (
             <button
               key={i}
-              className={`text-sm px-2 py-0.5 rounded transition-colors ${
+              className={`text-xs px-1.5 py-0.5 rounded transition-all active:scale-95 ${
                 i === 0
-                  ? 'bg-blue-500/20 text-blue-400'
-                  : 'text-[#e2e8f0] hover:bg-white/10'
+                  ? 'bg-blue-500/25 text-blue-300 hover:bg-blue-500/40'
+                  : 'text-slate-200 hover:bg-white/10'
               }`}
               onClick={() => handleSelect(i)}
             >
-              <span className="text-xs text-[#94a3b8] mr-1">{i + 1}</span>
+              <span className="text-[10px] text-blue-400/70 mr-0.5">{i + 1}</span>
               {word}
             </button>
           ))}
         </div>
       ) : (
-        <span className="text-[#94a3b8] text-xs">无匹配结果</span>
+        <span className="text-slate-500 text-xs">无匹配</span>
       )}
+
+      <button
+        className="text-slate-500 hover:text-slate-300 hover:bg-white/10 text-xs ml-1 px-1 py-0.5 rounded transition-all"
+        onClick={() => ClearPinyinBuf()}
+      >
+        ✕
+      </button>
     </div>
   )
 }

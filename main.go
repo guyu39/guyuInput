@@ -19,21 +19,19 @@ func main() {
 
 	err := wails.Run(&options.App{
 		Title:     "guyuInput",
-		Width:     320,
-		Height:    200,
-		MinWidth:  280,
-		MinHeight: 100,
+		Width:     280,
+		Height:    36,
+		MinWidth:  100,
+		MinHeight: 36,
 
-		// 无边框 + 透明背景
+		// 无边框悬浮窗，背景色与内层控件统一 (#1b2636)
 		Frameless:        true,
 		AlwaysOnTop:      true,
-		BackgroundColour: &options.RGBA{R: 0, G: 0, B: 0, A: 0},
 		DisableResize:    true,
+		BackgroundColour: &options.RGBA{R: 27, G: 38, B: 54, A: 1},
 
-		// 不在任务栏显示（悬浮窗形态）
 		Windows: &windows.Options{
 			WebviewIsTransparent: true,
-			WindowIsTranslucent:  true,
 		},
 		Mac: &mac.Options{
 			TitleBar:             mac.TitleBarHiddenInset(),

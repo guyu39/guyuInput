@@ -25,7 +25,7 @@ type XunfeiClient struct {
 }
 
 // NewXunfeiClient 创建讯飞客户端
-// 从环境变量读取: XUNFEI_APP_ID, XUNFEI_API_KEY, XUNFEI_API_SECRET
+// 优先从环境变量读取，其次从配置: XUNFEI_APP_ID, XUNFEI_API_KEY, XUNFEI_API_SECRET
 func NewXunfeiClient() *XunfeiClient {
 	return &XunfeiClient{
 		appID:  os.Getenv("XUNFEI_APP_ID"),
@@ -33,6 +33,29 @@ func NewXunfeiClient() *XunfeiClient {
 		secret: os.Getenv("XUNFEI_API_SECRET"),
 		done:   make(chan struct{}),
 	}
+}
+
+// SetCredentials 动态设置 API 凭证
+func (c *XunfeiClient) SetCredentials(appID, apiKey, secret string) {
+	if appID != "" {
+		c.appID = appID
+	}
+	if apiKey != "" {
+		c.apiKey = apiKey
+	}
+	if secret != "" {
+		c.secret = secret
+	}
+}
+
+// GetCredentials 获取当前 API 凭证
+func (c *XunfeiClient) GetCredentials() (appID, apiKey, secret string) {
+	return c.appID, c.apiKey, c.secret
+}
+
+// HasCredentials 检查凭证是否已配置
+func (c *XunfeiClient) HasCredentials() bool {
+	return c.appID != "" && c.apiKey != "" && c.secret != ""
 }
 
 func (c *XunfeiClient) Mode() ASRMode {

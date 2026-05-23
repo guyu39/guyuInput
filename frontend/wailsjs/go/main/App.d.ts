@@ -12,6 +12,8 @@ export function CheckFirstRun():Promise<boolean>;
 
 export function ClearPinyinBuf():Promise<void>;
 
+export function CloseSettings():Promise<void>;
+
 export function CommitCandidate(arg1:string):Promise<void>;
 
 export function CompleteGuide():Promise<void>;
@@ -28,6 +30,8 @@ export function GetConfig(arg1:string):Promise<string>;
 
 export function GetDictStats():Promise<dict.Stats>;
 
+export function GetHotkey():Promise<string>;
+
 export function GetInputMode():Promise<string>;
 
 export function GetPinyinBuf():Promise<string>;
@@ -35,6 +39,10 @@ export function GetPinyinBuf():Promise<string>;
 export function GetVersion():Promise<string>;
 
 export function GetVolume():Promise<number>;
+
+export function GetXunfeiCredentials():Promise<Record<string, string>>;
+
+export function HasXunfeiCredentials():Promise<boolean>;
 
 export function ImportDict(arg1:string):Promise<number>;
 
@@ -53,6 +61,10 @@ export function SetASRMode(arg1:string):Promise<void>;
 export function SetAudioDevice(arg1:string):Promise<void>;
 
 export function SetConfig(arg1:string,arg2:string):Promise<void>;
+
+export function SetHotkey(arg1:string):Promise<void>;
+
+export function SetXunfeiCredentials(arg1:string,arg2:string,arg3:string):Promise<void>;
 
 export function ShowWindow():Promise<void>;
 
