@@ -39,3 +39,6 @@ Thumbs.db
 # 配置与数据
 config.db
 *.log
+
+# 离线 ASR 模型（体积大，需单独下载）
+models/

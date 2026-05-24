@@ -9,6 +9,7 @@ from typing import Optional
 
 import numpy as np
 from PySide6.QtCore import QObject, Signal
+from PySide6.QtWidgets import QApplication
 
 from .config import ConfigManager
 from .audio import AudioCapture
@@ -16,7 +17,7 @@ from .hotkey import HotkeyManager
 from .input import TextInjector
 from .asr import (
     ASRDispatcher, XunfeiASR, AliASR, DoubaoASR, MiniMaxASR,
-    FunASREngine, ASRResult, ASRMode,
+    SherpaOnnxEngine, ASRResult, ASRMode,
 )
 
 logger = logging.getLogger('guyuInput')
@@ -68,7 +69,7 @@ class API(QObject):
         # 在线 ASR 引擎（四个供应商）
         self._online_engines = {}
         self._init_engines()
-        self.offline_engine = FunASREngine()
+        self.offline_engine = SherpaOnnxEngine()
         self.asr_mode = ASRMode(config.get('asr_mode', 'auto'))
 
         provider = config.get('asr_provider', 'xunfei')
@@ -229,6 +230,12 @@ class API(QObject):
 
     def stop_recording(self, confirm: bool = True):
         self.audio.stop()
+
+        # 离线模式：先刷新 UI 显示"识别中..."，再同步阻塞识别
+        if confirm and self.dispatcher.current_engine_name == "offline":
+            self.asr_partial.emit("识别中...")
+            QApplication.processEvents()
+
         self.dispatcher.stop()
         self._cancel_silence_timer()
 

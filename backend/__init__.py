@@ -5,7 +5,7 @@ from .audio import AudioCapture, AudioDevice
 from .hotkey import HotkeyManager
 from .input import TextInjector
 from .tray import SystemTray
-from .asr import ASRDispatcher, XunfeiASR, FunASREngine, ASRResult, ASRMode
+from .asr import ASRDispatcher, XunfeiASR, SherpaOnnxEngine, ASRResult, ASRMode
 
 __all__ = [
     'API',
@@ -18,7 +18,7 @@ __all__ = [
     'SystemTray',
     'ASRDispatcher',
     'XunfeiASR',
-    'FunASREngine',
+    'SherpaOnnxEngine',
     'ASRResult',
     'ASRMode',
 ]
