@@ -14,6 +14,9 @@ CONFIRM_COLOR = QColor(34, 197, 94)
 TEXT_MAX_LINES = 3
 LINE_HEIGHT = 18
 
+STATUS_COLOR = "#94a3b8"  # 状态提示灰
+TEXT_COLOR = "#f1f5f9"    # 识别文字白
+
 
 class RecordingWidget(QWidget):
     """录音状态条"""
@@ -26,6 +29,7 @@ class RecordingWidget(QWidget):
         self.setMinimumWidth(200)
         self.setMaximumWidth(360)
         self._volume = 0.0
+        self._is_status = False
 
         layout = QHBoxLayout(self)
         layout.setContentsMargins(6, 4, 6, 4)
@@ -43,14 +47,9 @@ class RecordingWidget(QWidget):
         self._text_edit.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self._text_edit.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self._text_edit.setFrameShape(QTextEdit.NoFrame)
-        self._text_edit.setStyleSheet(
-            "color: #f1f5f9; font-size: 14px;"
-            "background-color: rgba(15, 23, 42, 0.5);"
-            "border-radius: 8px;"
-            "selection-background-color: transparent; padding: 4px 8px;"
-        )
         self._text_edit.document().setDocumentMargin(0)
         self._text_edit.setTabChangesFocus(False)
+        self._text_edit.hide()
         layout.addWidget(self._text_edit, 1)
 
         self._confirm_btn = _IconButton(draw_check, CONFIRM_COLOR)
@@ -68,20 +67,53 @@ class RecordingWidget(QWidget):
         """)
 
     def set_text(self, text: str):
-        self._text_edit.setPlainText(text)
-        sb = self._text_edit.verticalScrollBar()
-        if sb:
-            sb.setValue(sb.maximum())
+        """显示识别文字（白色）"""
+        self._is_status = False
+        if text:
+            self._text_edit.setStyleSheet(
+                f"color: {TEXT_COLOR}; font-size: 14px;"
+                "background-color: rgba(15, 23, 42, 0.5);"
+                "border-radius: 8px;"
+                "selection-background-color: transparent; padding: 4px 8px;"
+            )
+            self._text_edit.setPlainText(text)
+            self._text_edit.show()
+            sb = self._text_edit.verticalScrollBar()
+            if sb:
+                sb.setValue(sb.maximum())
+        else:
+            self._text_edit.hide()
+            self._text_edit.clear()
         self._fit_height()
 
     def set_engine(self, name: str):
         pass
+
+    def show_status(self, text: str):
+        """显示状态提示（灰色、无背景），与识别文字共用同一区域"""
+        self._is_status = True
+        if text:
+            self._text_edit.setStyleSheet(
+                f"color: {STATUS_COLOR}; font-size: 14px;"
+                "background: transparent;"
+                "selection-background-color: transparent; padding: 4px 8px;"
+            )
+            self._text_edit.setPlainText(text)
+            self._text_edit.show()
+        else:
+            self._text_edit.hide()
+            self._text_edit.clear()
+        self._fit_height()
 
     def set_volume(self, level: float):
         self._volume = min(level, 1.5)
         self.update()
 
     def _fit_height(self):
+        if self._text_edit.isHidden():
+            self.setFixedHeight(48)
+            return
+
         doc = self._text_edit.document()
         doc.setTextWidth(self._text_edit.viewport().width() or 180)
         content_h = int(doc.size().height())

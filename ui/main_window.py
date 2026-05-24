@@ -149,8 +149,9 @@ class MainWindow(QMainWindow):
         else:
             self.setMask(QRegion())
 
-        # Qt 的 setMask / resize 可能覆盖窗口样式，重新加回 WS_EX_NOACTIVATE
-        self._apply_ws_ex_noactivate()
+        # Qt 的 setMask / resize 可能覆盖窗口样式，仅在非激活模式下加回
+        if not self._allow_activate:
+            self._apply_ws_ex_noactivate()
 
     def _connect_signals(self):
         self.idle.clicked.connect(lambda: self.start_recording_signal.emit(-1))

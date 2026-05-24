@@ -51,6 +51,7 @@ def main():
     api.silence_timeout.connect(lambda: window.show_error("未检测到语音，即将关闭", auto_dismiss_ms=2000))
     api.asr_partial.connect(window.update_text)
     api.asr_final.connect(window.update_text)
+    api.asr_status.connect(window.recording.show_status)
     def _on_asr_error(msg: str):
         api.stop_recording(confirm=False)
         window.show_error(msg, auto_dismiss_ms=5000)
