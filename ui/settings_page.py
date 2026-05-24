@@ -10,6 +10,7 @@ from PySide6.QtWidgets import (
 )
 
 DARK_BG = "#0f172a"
+GLASS_BG = "rgba(15, 23, 42, 0.95)"
 CARD_BG = "#1e293b"
 BORDER = "rgba(255,255,255,0.05)"
 
@@ -46,7 +47,10 @@ class SettingsPage(QWidget):
 
         # ── 标题栏 ──
         header = QWidget()
-        header.setStyleSheet(f"background: {DARK_BG}; border-bottom: 1px solid {BORDER};")
+        header.setStyleSheet(
+            f"background: {DARK_BG}; border-bottom: 1px solid {BORDER};"
+            f"border-top-left-radius: 16px; border-top-right-radius: 16px;"
+        )
         header_layout = QHBoxLayout(header)
         header_layout.setContentsMargins(20, 16, 20, 16)
         title = QLabel("设置")
@@ -89,7 +93,10 @@ class SettingsPage(QWidget):
         """)
 
         content = QWidget()
-        content.setStyleSheet(f"background: {DARK_BG};")
+        content.setStyleSheet(
+            f"background: {DARK_BG};"
+            f"border-bottom-left-radius: 16px; border-bottom-right-radius: 16px;"
+        )
         content.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
         cv = QVBoxLayout(content)
         cv.setContentsMargins(20, 20, 28, 20)
@@ -111,8 +118,8 @@ class SettingsPage(QWidget):
 
         self.setStyleSheet(f"""
             SettingsPage {{
-                background: {DARK_BG};
-                border: 1px solid {BORDER};
+                background: {GLASS_BG};
+                border: 1px solid rgba(255,255,255,0.12);
                 border-radius: 16px;
             }}
         """)

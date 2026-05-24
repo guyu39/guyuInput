@@ -35,6 +35,7 @@ class AliASR(ASREngine):
         self._is_running = False
         self._thread = None
         self._connected = False
+        self._ready = False
         self._task_id = ""
         self._message_id = ""
 
@@ -109,6 +110,7 @@ class AliASR(ASREngine):
         self._on_error = on_error
         self._is_running = True
         self._connected = False
+        self._ready = False
         self._task_id = str(uuid.uuid4()).replace("-", "")
         self._message_id = str(uuid.uuid4()).replace("-", "")
 
@@ -116,7 +118,7 @@ class AliASR(ASREngine):
         self._thread.start()
 
     def feed_audio(self, audio_data: np.ndarray):
-        if not self._connected or not self._ws:
+        if not self._ready or not self._ws:
             return
         try:
             pcm = (audio_data * 32767).astype('<i2').tobytes()
@@ -147,6 +149,7 @@ class AliASR(ASREngine):
                 pass
             self._ws = None
         self._connected = False
+        self._ready = False
 
     def _run_ws(self):
         try:
@@ -210,6 +213,12 @@ class AliASR(ASREngine):
         status = header.get("status", 0)
         status_text = header.get("status_text", "")
 
+        # 识别任务就绪，可以开始发送音频
+        if name == "TranscriptionStarted":
+            self._ready = True
+            logger.info("阿里 ASR 任务就绪，开始接收音频")
+            return
+
         # 服务端错误事件 (如 TaskFailed)
         if name == "TaskFailed" and self._on_error:
             self._on_error(f"阿里云: {status_text} (状态码: {status})")
@@ -231,13 +240,17 @@ class AliASR(ASREngine):
             if self._is_running:
                 logger.warning(f"阿里 WS 服务端非预期关闭: {err_str}")
                 if self._on_error:
-                    self._on_error(f"服务端关闭连接: {err_str}")
+                    self._on_error("阿里云服务端关闭了连接，请重试")
             else:
                 logger.info(f"阿里 WS 服务端关闭: {err_str}")
+        elif "sock" in err_str or "NoneType" in err_str:
+            logger.warning(f"阿里 WS 连接失败: {err_str}")
+            if self._on_error:
+                self._on_error("阿里云连接失败，请检查网络或 API 凭证")
         else:
             logger.warning(f"阿里 WS 错误: {err_str}")
             if self._on_error:
-                self._on_error(err_str)
+                self._on_error(f"阿里云识别错误: {err_str}")
 
     def _on_close(self, ws, close_status_code, close_msg):
         logger.info("阿里 ASR WebSocket 已关闭")

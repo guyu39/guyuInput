@@ -27,6 +27,7 @@ STEPS = [
 ]
 
 DARK_BG = "#0f172a"
+GLASS_BG = "rgba(15, 23, 42, 0.95)"
 BTN_BG = "#2563eb"
 BTN_HOVER = "#3b82f6"
 
@@ -75,7 +76,10 @@ class GuidePage(QWidget):
 
         # 底部按钮
         btn_row = QWidget()
-        btn_row.setStyleSheet(f"background: {DARK_BG};")
+        btn_row.setStyleSheet(
+            f"background: {DARK_BG};"
+            f"border-bottom-left-radius: 16px; border-bottom-right-radius: 16px;"
+        )
         btn_layout = QHBoxLayout(btn_row)
         btn_layout.setContentsMargins(24, 0, 24, 20)
 
@@ -106,8 +110,8 @@ class GuidePage(QWidget):
 
         self.setStyleSheet(f"""
             GuidePage {{
-                background: {DARK_BG};
-                border: 1px solid rgba(255,255,255,0.1);
+                background: {GLASS_BG};
+                border: 1px solid rgba(255,255,255,0.12);
                 border-radius: 16px;
             }}
         """)

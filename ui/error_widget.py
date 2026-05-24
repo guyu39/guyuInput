@@ -35,18 +35,22 @@ class ErrorWidget(QWidget):
         self.msg_label.setMaximumWidth(360)
         layout.addWidget(self.msg_label, 1)
 
-        # 关闭按钮
-        close_btn = QPushButton()
-        close_btn.setFixedSize(24, 24)
+        # 关闭按钮 — 与录音条取消按钮风格统一
+        close_btn = QPushButton("✕")
+        close_btn.setFixedSize(28, 28)
         close_btn.setCursor(Qt.PointingHandCursor)
+        close_btn.setFocusPolicy(Qt.NoFocus)
         close_btn.setStyleSheet("""
             QPushButton {
-                background: rgba(239,68,68,0.2);
+                background: rgb(239, 68, 68);
+                color: white;
+                font-size: 14px;
+                font-weight: bold;
                 border: none;
-                border-radius: 12px;
+                border-radius: 14px;
             }
             QPushButton:hover {
-                background: rgba(239,68,68,0.4);
+                background: rgb(248, 113, 113);
             }
         """)
         close_btn.clicked.connect(self.dismissed.emit)
@@ -54,8 +58,8 @@ class ErrorWidget(QWidget):
 
         self.setStyleSheet("""
             ErrorWidget {
-                background-color: #1e293b;
-                border: 1px solid rgba(239,68,68,0.3);
+                background-color: rgba(15, 23, 42, 0.95);
+                border: 1px solid rgba(239,68,68,0.4);
                 border-radius: 12px;
             }
         """)

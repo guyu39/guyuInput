@@ -20,6 +20,9 @@ class HotkeyManager:
         self._on_press: Optional[Callable] = None
         self._on_release: Optional[Callable] = None
         self._hook_id = None
+        self._required_mods: set[str] = set()
+        self._main_keys: set[str] = set()
+        self._parse_hotkey()
 
     def register_callbacks(self, on_press: Callable, on_release: Callable):
         """注册按下 / 松开回调"""
@@ -34,6 +37,7 @@ class HotkeyManager:
             return False
 
         self.hotkey_str = hotkey_str
+        self._parse_hotkey()
         if self._hook_id is not None:
             keyboard.unhook(self._hook_id)
         self._register_hook()
@@ -47,47 +51,56 @@ class HotkeyManager:
             self._hook_id = None
         self._is_pressed = False
 
-    def _register_hook(self):
-        """注册键盘钩子"""
+    def _parse_hotkey(self):
         parts = set(self.hotkey_str.lower().split('+'))
+        self._required_mods = parts & VALID_MODIFIERS
+        self._main_keys = parts - VALID_MODIFIERS
 
-        def hook_event(e):
+    def _register_hook(self):
+        """注册键盘钩子 - suppress=False 确保不拦截系统快捷键"""
+        self._hook_id = keyboard.hook(self._on_hook_event, suppress=False)
+
+    def _on_hook_event(self, e):
+        """钩子回调 - 必须快速返回，否则会影响系统键盘响应"""
+        try:
             if e.event_type not in ('down', 'up'):
                 return
 
-            mods = set()
-            if 'ctrl' in parts and (keyboard.is_pressed('ctrl') or keyboard.is_pressed('right ctrl')):
-                mods.add('ctrl')
-            if 'alt' in parts and (keyboard.is_pressed('alt') or keyboard.is_pressed('right alt')):
-                mods.add('alt')
-            if 'shift' in parts and (keyboard.is_pressed('shift') or keyboard.is_pressed('right shift')):
-                mods.add('shift')
-            if 'win' in parts and (keyboard.is_pressed('windows') or keyboard.is_pressed('right windows')):
-                mods.add('win')
-
-            required_mods = parts & VALID_MODIFIERS
-            if mods != required_mods:
+            # 快速检查：修饰键数量不对就跳过
+            mods = self._get_active_mods()
+            if mods != self._required_mods:
                 if self._is_pressed and e.event_type == 'up':
-                    # 修饰键松开了，视为按键释放
                     self._is_pressed = False
                     if self._on_release:
                         self._on_release()
                 return
 
-            main_keys = parts - VALID_MODIFIERS
-            for mk in main_keys:
-                if e.name.lower() == mk:
-                    if e.event_type == 'down' and not self._is_pressed:
-                        self._is_pressed = True
-                        if self._on_press:
-                            self._on_press()
-                    elif e.event_type == 'up' and self._is_pressed:
-                        self._is_pressed = False
-                        if self._on_release:
-                            self._on_release()
-                    break
+            # 检查是否匹配主键
+            if e.name.lower() in self._main_keys:
+                if e.event_type == 'down' and not self._is_pressed:
+                    self._is_pressed = True
+                    if self._on_press:
+                        self._on_press()
+                elif e.event_type == 'up' and self._is_pressed:
+                    self._is_pressed = False
+                    if self._on_release:
+                        self._on_release()
+        except Exception:
+            logger.warning("键盘钩子回调异常", exc_info=True)
 
-        self._hook_id = keyboard.hook(hook_event)
+    def _get_active_mods(self) -> set[str]:
+        """快速获取当前按下的修饰键集合"""
+        mods = set()
+        if self._required_mods:
+            if 'ctrl' in self._required_mods and (keyboard.is_pressed('ctrl') or keyboard.is_pressed('right ctrl')):
+                mods.add('ctrl')
+            if 'alt' in self._required_mods and (keyboard.is_pressed('alt') or keyboard.is_pressed('right alt')):
+                mods.add('alt')
+            if 'shift' in self._required_mods and (keyboard.is_pressed('shift') or keyboard.is_pressed('right shift')):
+                mods.add('shift')
+            if 'win' in self._required_mods and (keyboard.is_pressed('windows') or keyboard.is_pressed('right windows')):
+                mods.add('win')
+        return mods
 
     @staticmethod
     def validate_hotkey(hotkey_str: str) -> bool:

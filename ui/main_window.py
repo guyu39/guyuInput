@@ -1,6 +1,7 @@
 """
 主窗口控制器 - 管理视图切换和窗口属性
 """
+import ctypes
 from PySide6.QtCore import Qt, Signal, QPoint, QTimer
 from PySide6.QtGui import QMouseEvent, QRegion
 from PySide6.QtWidgets import QApplication, QMainWindow, QStackedWidget, QWidget
@@ -26,13 +27,15 @@ class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
 
-        # 窗口属性
+        # 窗口属性 — 不抢焦点、不激活
         self.setWindowFlags(
             Qt.FramelessWindowHint |
             Qt.WindowStaysOnTopHint |
             Qt.Tool
         )
         self.setAttribute(Qt.WA_TranslucentBackground)
+        self.setAttribute(Qt.WA_ShowWithoutActivating)
+        self.setFocusPolicy(Qt.NoFocus)
 
         # 拖拽支持
         self._drag_pos: QPoint | None = None
@@ -82,7 +85,7 @@ class MainWindow(QMainWindow):
         self.recording.set_text("")
         self.recording.set_volume(0.0)
         self.stack.setCurrentWidget(self.recording)
-        self._set_window_size(200, 48, circular=False)
+        self._set_window_size(280, 66, circular=False)
 
     def show_error(self, message: str, auto_dismiss_ms: int = 0):
         self.error.set_message(message)
@@ -153,6 +156,20 @@ class MainWindow(QMainWindow):
     def _on_guide_done(self):
         self.config_signal.emit("first_run", "false")
         self.show_idle()
+
+    # ================================================================
+    # 焦点拦截 — 鼠标点击不激活窗口
+    # ================================================================
+
+    def nativeEvent(self, event_type, message):
+        """拦截 WM_MOUSEACTIVATE，防止点击窗口时抢夺焦点"""
+        WM_MOUSEACTIVATE = 0x0021
+        MA_NOACTIVATE = 3
+        if event_type == "windows_generic_MSG":
+            msg = ctypes.wintypes.MSG.from_address(int(message))
+            if msg.message == WM_MOUSEACTIVATE:
+                return True, MA_NOACTIVATE
+        return False, 0
 
     # ================================================================
     # 窗口拖拽

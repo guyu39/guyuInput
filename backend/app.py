@@ -81,6 +81,7 @@ class API(QObject):
 
         # 录音状态
         self._recognized_text: str = ""
+        self._accumulated_text: str = ""
         self._silence_timer: Optional[threading.Timer] = None
 
         # 绑定快捷键
@@ -191,6 +192,7 @@ class API(QObject):
     def start_recording(self, device_id: int = -1):
         try:
             self._recognized_text = ""
+            self._accumulated_text = ""
 
             # 前置检查：在线 / 自动模式下，当前供应商是否有凭证
             if self.dispatcher.mode != ASRMode.OFFLINE:
@@ -232,7 +234,7 @@ class API(QObject):
 
         if confirm and self._recognized_text.strip():
             text = self._recognized_text.strip()
-            threading.Thread(target=self.injector.inject_text, args=(text,), daemon=True).start()
+            self.injector.inject_text(text)
             self.recording_stopped.emit(text, True)
         else:
             self.recording_stopped.emit("", False)
@@ -269,11 +271,13 @@ class API(QObject):
 
     def _on_asr_result(self, result: ASRResult):
         if result.is_partial:
-            self._recognized_text = result.text
-            self.asr_partial.emit(result.text)
+            display = self._accumulated_text + result.text
+            self._recognized_text = display
+            self.asr_partial.emit(display)
         else:
-            self._recognized_text = result.text
-            self.asr_final.emit(result.text)
+            self._accumulated_text += result.text
+            self._recognized_text = self._accumulated_text
+            self.asr_final.emit(self._accumulated_text)
 
     def _on_asr_error(self, err: str):
         logger.warning(f"ASR 错误: {err}")

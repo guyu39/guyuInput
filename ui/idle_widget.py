@@ -17,6 +17,7 @@ class IdleWidget(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setFixedSize(64, 64)
+        self.setFocusPolicy(Qt.NoFocus)
         self.setCursor(Qt.PointingHandCursor)
         self.setToolTip("左键录音  |  右键打开设置")
         self._hovered = False
@@ -26,10 +27,13 @@ class IdleWidget(QWidget):
         painter = QPainter(self)
         painter.setRenderHint(QPainter.Antialiasing)
 
-        # 背景圆
-        bg = QColor(51, 65, 85) if self._hovered else QColor(30, 41, 59)  # #334155 : #1e293b
+        # 背景圆 - 毛玻璃暗底
+        if self._hovered:
+            bg = QColor(30, 41, 59, 245)
+        else:
+            bg = QColor(15, 23, 42, 235)
         painter.setBrush(QBrush(bg))
-        painter.setPen(QPen(QColor(255, 255, 255, 25), 1))  # border-white/10
+        painter.setPen(QPen(QColor(255, 255, 255, 30), 1))  # border-white/12
         r = self.width() / 2 - 2
         painter.drawEllipse(self.rect().center(), r, r)
 
