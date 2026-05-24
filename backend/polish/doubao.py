@@ -10,7 +10,7 @@ from .prompts import get_prompt
 logger = logging.getLogger('guyuInput')
 
 _DEFAULT_ENDPOINT = "https://ark.cn-beijing.volces.com/api/v3/chat/completions"
-_DEFAULT_TIMEOUT = 5  # 秒
+_DEFAULT_TIMEOUT = 15  # 秒
 
 
 class DoubaoPolisher(BasePolisher):

@@ -444,8 +444,8 @@ class SettingsPage(QWidget):
             "doubao-pro-32k", "doubao-lite-32k",
             "deepseek-chat",
         ])
-        self._polish_model_combo.currentTextChanged.connect(
-            lambda t: self.config_changed.emit("polish_model", t)
+        self._polish_model_combo.lineEdit().editingFinished.connect(
+            lambda: self.config_changed.emit("polish_model", self._polish_model_combo.currentText())
         )
         parent_layout.addWidget(self._polish_model_combo)
 
