@@ -8,10 +8,11 @@ from PySide6.QtWidgets import QWidget
 
 from .icons import draw_mic, draw_x
 
-# 关闭按钮在 64×64 圆形中的位置 — 右上角，避开麦克风图标
-CLOSE_BTN_CX = 50    # 圆心 x
-CLOSE_BTN_CY = 12    # 圆心 y
-CLOSE_BTN_R = 7      # 半径
+# 关闭按钮 — 圆外右上角，避开麦克风图标和圆形区域
+# 圆形半径 30，中心 (32,32)，右上边缘约 (53,11)；按钮放在 (55,10) 确保在圆外
+CLOSE_BTN_CX = 55
+CLOSE_BTN_CY = 10
+CLOSE_BTN_R = 6
 
 
 class IdleWidget(QWidget):
@@ -47,33 +48,26 @@ class IdleWidget(QWidget):
         painter = QPainter(self)
         painter.setRenderHint(QPainter.Antialiasing)
 
-        # 背景圆
+        # 背景圆 - 毛玻璃暗底
         if self._hovered:
             bg = QColor(30, 41, 59, 245)
         else:
             bg = QColor(15, 23, 42, 235)
         painter.setBrush(QBrush(bg))
-        painter.setPen(QPen(QColor(255, 255, 255, 30), 1))
-        r = self.width() / 2 - 2
-        painter.drawEllipse(self.rect().center(), r, r)
+        painter.setPen(QPen(QColor(255, 255, 255, 30), 1))  # border-white/12
+        
+        # 修复 2：使用浮点除法并转为 QRectF，防止坐标截断导致整个图形向左上角偏移 1 像素
+        r = self.width() / 2.0 - 2.0
+        center_point = QRectF(self.rect()).center()
+        
+        painter.drawEllipse(center_point, r, r)
 
         # 麦克风图标
-        draw_mic(painter, self.rect().toRectF(), QColor(96, 165, 250))
+        draw_mic(painter, QRectF(self.rect()), QColor(96, 165, 250))  # blue-400
 
-        # 关闭按钮 — 小圆 + X
-        if self._close_hovered:
-            close_rect = self._close_rect()
-            painter.setBrush(QBrush(QColor(239, 68, 68, 200)))   # red-500
-            painter.setPen(Qt.NoPen)
-            painter.drawEllipse(close_rect.center(), CLOSE_BTN_R, CLOSE_BTN_R)
-            draw_x(painter, close_rect, QColor(255, 255, 255))
-        else:
-            # 半透明小圈提示可关闭
-            close_rect = self._close_rect()
-            painter.setBrush(QBrush(QColor(255, 255, 255, 20)))
-            painter.setPen(Qt.NoPen)
-            painter.drawEllipse(close_rect.center(), CLOSE_BTN_R, CLOSE_BTN_R)
-            draw_x(painter, close_rect, QColor(255, 255, 255, 80))
+        # 关闭按钮 ×
+        close_color = QColor(239, 68, 68) if self._close_hovered else QColor(148, 163, 184, 100)
+        draw_x(painter, self._close_rect(), close_color)
 
     def enterEvent(self, event):
         self._hovered = True

@@ -98,15 +98,13 @@ class API(QObject):
         self._sync_polisher()
 
         # 录音状态
+        self._recording = False
         self._recognized_text: str = ""
         self._accumulated_text: str = ""
         self._silence_timer: Optional[threading.Timer] = None
 
-        # 绑定快捷键
-        self.hotkey.register_callbacks(
-            on_press=self._on_hotkey_press,
-            on_release=self._on_hotkey_release,
-        )
+        # 绑定快捷键（单按切换模式）
+        self.hotkey.register_toggle_callback(on_toggle=self._on_hotkey_toggle)
 
     def _init_engines(self):
         """根据配置初始化所有在线引擎"""
@@ -278,6 +276,7 @@ class API(QObject):
             )
 
             self._reset_silence_timer()
+            self._recording = True
             self.recording_started.emit(self.dispatcher.current_engine_name)
 
             # 离线模式无流式输出，显示状态提示避免主区域空白
@@ -288,6 +287,7 @@ class API(QObject):
             self.recording_error.emit(str(e))
 
     def stop_recording(self, confirm: bool = True):
+        self._recording = False
         self.audio.stop()
 
         # 离线模式：先刷新 UI 显示"识别中..."，再同步阻塞识别
@@ -305,8 +305,10 @@ class API(QObject):
             if self.config.get_bool('dictionary_enabled', True):
                 text = self.dict_corrector.correct(text)
 
-            # 二级：AI 润色（默认关闭）
-            if self.config.get_bool('polish_enabled', False) and self.polish_dispatcher.is_available:
+            # 二级：AI 润色（默认关闭，跳过过短文本）
+            if (self.config.get_bool('polish_enabled', False)
+                    and self.polish_dispatcher.is_available
+                    and len(text) >= 3):
                 self.asr_status.emit("润色中...")
                 QApplication.processEvents()
                 mode_str = self.config.get('polish_mode', 'moderate')
@@ -368,13 +370,13 @@ class API(QObject):
         self.asr_error.emit(err)
 
     # ================================================================
-    # 快捷键回调
+    # 快捷键回调（单按切换模式）
     # ================================================================
 
-    def _on_hotkey_press(self):
-        logger.info("快捷键按下，开始录音")
-        self.start_recording()
-
-    def _on_hotkey_release(self):
-        logger.info("快捷键松开，停止录音")
-        self.stop_recording(confirm=True)
+    def _on_hotkey_toggle(self):
+        if self._recording:
+            logger.info("快捷键切换：停止录音")
+            self.stop_recording(confirm=True)
+        else:
+            logger.info("快捷键切换：开始录音")
+            self.start_recording()
