@@ -21,7 +21,7 @@ class IdleWidget(QWidget):
         self.setCursor(Qt.PointingHandCursor)
         self.setToolTip("左键录音  |  右键打开设置")
         self._hovered = False
-        self._drag_pos: QPoint | None = None
+        self._press_pos: QPoint | None = None
 
     def paintEvent(self, event):
         painter = QPainter(self)
@@ -50,25 +50,13 @@ class IdleWidget(QWidget):
 
     def mousePressEvent(self, event: QMouseEvent):
         if event.button() == Qt.LeftButton:
-            self._drag_pos = event.globalPosition().toPoint()
+            self._press_pos = event.globalPosition().toPoint()
         elif event.button() == Qt.RightButton:
             self.settings_requested.emit()
 
     def mouseReleaseEvent(self, event: QMouseEvent):
-        if event.button() == Qt.LeftButton:
-            if self._drag_pos is not None:
-                delta = event.globalPosition().toPoint() - self._drag_pos
-                if delta.manhattanLength() < 5:
-                    self.clicked.emit()
-            self._drag_pos = None
-
-    def mouseMoveEvent(self, event: QMouseEvent):
-        if self._drag_pos is not None:
-            delta = event.globalPosition().toPoint() - self._drag_pos
-            if delta.manhattanLength() > 3:
-                # 拖拽窗口
-                self.window().move(
-                    self.window().pos() +
-                    (event.globalPosition().toPoint() - self._drag_pos)
-                )
-                self._drag_pos = event.globalPosition().toPoint()
+        if event.button() == Qt.LeftButton and self._press_pos is not None:
+            delta = event.globalPosition().toPoint() - self._press_pos
+            if delta.manhattanLength() < 5:
+                self.clicked.emit()
+        self._press_pos = None

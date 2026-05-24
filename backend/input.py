@@ -1,5 +1,5 @@
 """
-文本注入模块 - 通过 Win32 SendInput 将文字输出到当前光标位置
+文本注入模块 - 统一使用剪贴板 + Ctrl+V，兼容性最广
 """
 import ctypes
 import time
@@ -9,14 +9,13 @@ from ctypes import wintypes
 logger = logging.getLogger('guyuInput')
 
 INPUT_KEYBOARD = 1
-KEYEVENTF_UNICODE = 0x0004
 KEYEVENTF_KEYUP = 0x0002
 
 VK_CONTROL = 0x11
 VK_V = 0x56
-
-# 超过此长度使用剪贴板方式
-CLIPBOARD_THRESHOLD = 50
+# 标准美式键盘扫描码
+SC_CTRL = 0x1D
+SC_V = 0x2F
 
 
 class _KEYBDINPUT(ctypes.Structure):
@@ -25,7 +24,7 @@ class _KEYBDINPUT(ctypes.Structure):
         ("wScan", wintypes.WORD),
         ("dwFlags", wintypes.DWORD),
         ("time", wintypes.DWORD),
-        ("dwExtraInfo", ctypes.POINTER(wintypes.ULONG)),
+        ("dwExtraInfo", wintypes.WPARAM),  # ULONG_PTR，非 POINTER
     ]
 
 
@@ -37,48 +36,50 @@ class _INPUT(ctypes.Structure):
 
 
 class TextInjector:
-    """文本注入器 - 短文本逐字符 SendInput，长文本剪贴板粘贴"""
+    """文本注入器 - 剪贴板 + Ctrl+V"""
 
     def __init__(self):
         self.user32 = ctypes.windll.user32
         self.kernel32 = ctypes.windll.kernel32
+
+        # 修复 x64 参数/返回值类型：默认 c_int 只有 32 位，指针是 64 位
+        self.kernel32.GlobalAlloc.restype = ctypes.c_void_p
+        self.kernel32.GlobalAlloc.argtypes = [wintypes.UINT, ctypes.c_size_t]
+
+        self.kernel32.GlobalLock.restype = ctypes.c_void_p
+        self.kernel32.GlobalLock.argtypes = [ctypes.c_void_p]
+
+        self.kernel32.GlobalUnlock.argtypes = [ctypes.c_void_p]
+
+        self.user32.OpenClipboard.argtypes = [ctypes.c_void_p]  # HWND
+
+        self.user32.GetClipboardData.restype = ctypes.c_void_p
+        self.user32.GetClipboardData.argtypes = [wintypes.UINT]
+
+        self.user32.SetClipboardData.argtypes = [wintypes.UINT, ctypes.c_void_p]
+
+        self.user32.SendInput.restype = wintypes.UINT
+        self.user32.SendInput.argtypes = [wintypes.UINT, ctypes.POINTER(_INPUT), wintypes.INT]
+
+        self.user32.GetForegroundWindow.restype = ctypes.c_void_p
+        self.user32.keybd_event.argtypes = [wintypes.BYTE, wintypes.BYTE, wintypes.DWORD, wintypes.WPARAM]
 
     def inject_text(self, text: str):
         """注入文本到当前光标位置"""
         if not text:
             return
 
-        if len(text) <= CLIPBOARD_THRESHOLD:
-            self._inject_by_char(text)
-        else:
-            self._inject_by_clipboard(text)
-
+        self._inject_via_clipboard(text)
         logger.info(f"文本已注入 ({len(text)} 字): {text[:30]}{'...' if len(text) > 30 else ''}")
 
-    def _inject_by_char(self, text: str):
-        """逐字符 SendInput"""
-        for ch in text:
-            char_code = ord(ch)
-            inputs = (_INPUT * 2)()
-
-            inputs[0].type = INPUT_KEYBOARD
-            inputs[0].ki.wScan = char_code
-            inputs[0].ki.dwFlags = KEYEVENTF_UNICODE
-
-            inputs[1].type = INPUT_KEYBOARD
-            inputs[1].ki.wScan = char_code
-            inputs[1].ki.dwFlags = KEYEVENTF_UNICODE | KEYEVENTF_KEYUP
-
-            self.user32.SendInput(2, ctypes.byref(inputs), ctypes.sizeof(_INPUT))
-            time.sleep(0.005)
-
-    def _inject_by_clipboard(self, text: str):
-        """剪贴板 + Ctrl+V（先保存再恢复原始剪贴板内容）"""
+    def _inject_via_clipboard(self, text: str):
+        """剪贴板 + Ctrl+V"""
         original = self._get_clipboard_text()
-        self._set_clipboard_text(text)
-        time.sleep(0.05)
+        if not self._set_clipboard_text(text):
+            return
+        time.sleep(0.08)
         self._simulate_ctrl_v()
-        time.sleep(0.1)
+        time.sleep(0.15)
         if original is not None:
             self._set_clipboard_text(original)
 
@@ -104,11 +105,10 @@ class TextInjector:
         except Exception:
             return None
 
-    def _set_clipboard_text(self, text: str):
-        """设置剪贴板文本"""
+    def _set_clipboard_text(self, text: str) -> bool:
+        """设置剪贴板文本，成功返回 True"""
         CF_UNICODETEXT = 13
         GMEM_MOVEABLE = 0x0002
-        GMEM_ZEROINIT = 0x0040
 
         for attempt in range(3):
             if self.user32.OpenClipboard(0):
@@ -116,42 +116,65 @@ class TextInjector:
             time.sleep(0.01)
         else:
             logger.warning("无法打开剪贴板")
-            return
+            return False
 
         try:
             self.user32.EmptyClipboard()
-
             text_data = text.encode('utf-16-le') + b'\x00\x00'
-            h_mem = self.kernel32.GlobalAlloc(GMEM_MOVEABLE | GMEM_ZEROINIT, len(text_data))
+            h_mem = self.kernel32.GlobalAlloc(GMEM_MOVEABLE, len(text_data))
+            if not h_mem:
+                logger.warning(f"GlobalAlloc 失败 (size={len(text_data)})")
+                return False
             p_mem = self.kernel32.GlobalLock(h_mem)
+            if not p_mem:
+                logger.warning("GlobalLock 失败")
+                return False
             ctypes.memmove(p_mem, text_data, len(text_data))
             self.kernel32.GlobalUnlock(h_mem)
-
             self.user32.SetClipboardData(CF_UNICODETEXT, h_mem)
+            return True
         finally:
             self.user32.CloseClipboard()
 
     def _simulate_ctrl_v(self):
-        """模拟 Ctrl+V - 使用 SendInput 原子发送，避免 keybd_event 卡键"""
+        """模拟 Ctrl+V — SendInput，失败时回退到 keybd_event"""
         inputs = (_INPUT * 4)()
 
         # Ctrl down
         inputs[0].type = INPUT_KEYBOARD
         inputs[0].ki.wVk = VK_CONTROL
+        inputs[0].ki.wScan = SC_CTRL
 
         # V down
         inputs[1].type = INPUT_KEYBOARD
         inputs[1].ki.wVk = VK_V
+        inputs[1].ki.wScan = SC_V
 
         # V up
         inputs[2].type = INPUT_KEYBOARD
         inputs[2].ki.wVk = VK_V
+        inputs[2].ki.wScan = SC_V
         inputs[2].ki.dwFlags = KEYEVENTF_KEYUP
 
         # Ctrl up
         inputs[3].type = INPUT_KEYBOARD
         inputs[3].ki.wVk = VK_CONTROL
+        inputs[3].ki.wScan = SC_CTRL
         inputs[3].ki.dwFlags = KEYEVENTF_KEYUP
 
-        self.user32.SendInput(4, ctypes.byref(inputs), ctypes.sizeof(_INPUT))
+        sent = self.user32.SendInput(4, inputs, ctypes.sizeof(_INPUT))
+        if sent == 4:
+            time.sleep(0.05)
+            return
+
+        # SendInput 被 UIPI 阻止，回退到 keybd_event
+        # keybd_event 会设置系统键盘状态，GetKeyState 能看到 Ctrl 按下，而 PostMessage 做不到
+        logger.warning(f"SendInput 被阻止 ({sent}/4)，使用 keybd_event 回退")
+        self.user32.keybd_event(VK_CONTROL, SC_CTRL, 0, 0)
+        time.sleep(0.03)
+        self.user32.keybd_event(VK_V, SC_V, 0, 0)
+        time.sleep(0.03)
+        self.user32.keybd_event(VK_V, SC_V, KEYEVENTF_KEYUP, 0)
+        time.sleep(0.03)
+        self.user32.keybd_event(VK_CONTROL, SC_CTRL, KEYEVENTF_KEYUP, 0)
         time.sleep(0.05)

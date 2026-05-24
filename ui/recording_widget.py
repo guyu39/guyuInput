@@ -38,6 +38,7 @@ class RecordingWidget(QWidget):
 
         self._text_edit = QTextEdit()
         self._text_edit.setReadOnly(True)
+        self._text_edit.setFocusPolicy(Qt.NoFocus)
         self._text_edit.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self._text_edit.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self._text_edit.setFrameShape(QTextEdit.NoFrame)

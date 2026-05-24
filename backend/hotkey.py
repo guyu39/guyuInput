@@ -2,6 +2,7 @@
 全局快捷键监听模块 - 基于 keyboard 库的键盘钩子
 """
 import logging
+import threading
 from typing import Callable, Optional
 
 import keyboard
@@ -22,6 +23,7 @@ class HotkeyManager:
         self._hook_id = None
         self._required_mods: set[str] = set()
         self._main_keys: set[str] = set()
+        self._suppressed = False
         self._parse_hotkey()
 
     def register_callbacks(self, on_press: Callable, on_release: Callable):
@@ -60,8 +62,18 @@ class HotkeyManager:
         """注册键盘钩子 - suppress=False 确保不拦截系统快捷键"""
         self._hook_id = keyboard.hook(self._on_hook_event, suppress=False)
 
+    def suppress_temporarily(self, duration: float = 0.5):
+        """文本注入期间抑制钩子，避免模拟的 Ctrl+V 被误判为热键"""
+        self._suppressed = True
+        threading.Timer(duration, self._unsuppress).start()
+
+    def _unsuppress(self):
+        self._suppressed = False
+
     def _on_hook_event(self, e):
         """钩子回调 - 必须快速返回，否则会影响系统键盘响应"""
+        if self._suppressed:
+            return
         try:
             if e.event_type not in ('down', 'up'):
                 return

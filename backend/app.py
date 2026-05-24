@@ -234,6 +234,7 @@ class API(QObject):
 
         if confirm and self._recognized_text.strip():
             text = self._recognized_text.strip()
+            self.hotkey.suppress_temporarily(0.5)
             self.injector.inject_text(text)
             self.recording_stopped.emit(text, True)
         else:
