@@ -1,0 +1,20 @@
+# 桌面窗口 (Qt)
+PySide6>=6.6.0
+
+# 音频处理
+sounddevice>=0.4.6
+numpy>=1.26.0
+soundfile>=0.12.1
+
+# 网络通信
+websocket-client>=1.6.0
+
+# 系统集成
+keyboard>=0.13.5
+pystray>=0.19.5
+pillow>=10.0.0
+
+# 离线 ASR（可选，按需安装）
+# funasr>=1.0.0
+# torch>=2.0.0
+# modelscope>=1.9.0

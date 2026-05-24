@@ -1,0 +1,16 @@
+[project]
+name = "guyuInput"
+version = "0.1.0"
+description = "Windows 智能语音输入法 - Python 版本"
+requires-python = ">=3.10"
+authors = [
+    { name = "guyuInput Team" }
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.black]
+line-length = 100
+target-version = ['py310']
