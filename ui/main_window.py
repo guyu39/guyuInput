@@ -155,6 +155,7 @@ class MainWindow(QMainWindow):
     def _connect_signals(self):
         self.idle.clicked.connect(lambda: self.start_recording_signal.emit(-1))
         self.idle.settings_requested.connect(self.show_settings)
+        self.idle.close_requested.connect(self.hide)
 
         self.recording.cancel.connect(lambda: self.stop_recording_signal.emit(False))
         self.recording.confirm.connect(lambda: self.stop_recording_signal.emit(True))

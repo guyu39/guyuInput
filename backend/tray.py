@@ -1,5 +1,6 @@
 """
 系统托盘模块 - 基于 pystray 的托盘图标和菜单
+左键点击 → 显示窗口；右键点击 → 设置 / 退出
 """
 import logging
 import threading
@@ -44,12 +45,14 @@ class SystemTray:
     def __init__(self):
         self._tray: Optional[pystray.Icon] = None
         self._on_show: Optional[Callable] = None
+        self._on_settings: Optional[Callable] = None
         self._on_quit: Optional[Callable] = None
         self._running = False
 
-    def setup(self, on_show: Callable, on_quit: Callable):
+    def setup(self, on_show: Callable, on_settings: Callable, on_quit: Callable):
         """设置回调"""
         self._on_show = on_show
+        self._on_settings = on_settings
         self._on_quit = on_quit
 
     def run(self):
@@ -63,11 +66,11 @@ class SystemTray:
             pystray.MenuItem(
                 "显示窗口",
                 self._handle_show,
-                default=True,
+                default=True,          # 左键点击直接显示窗口
             ),
             pystray.MenuItem(
-                "关于",
-                self._handle_about,
+                "设置",
+                self._handle_settings,
             ),
             pystray.Menu.SEPARATOR,
             pystray.MenuItem(
@@ -102,11 +105,11 @@ class SystemTray:
 
     def _handle_show(self):
         if self._on_show:
-            self._tray and self._on_show()
+            self._on_show()
 
-    def _handle_about(self):
-        if self._tray:
-            self._tray.notify("guyuInput v0.1.0\nWindows 智能语音输入法")
+    def _handle_settings(self):
+        if self._on_settings:
+            self._on_settings()
 
     def _handle_quit(self):
         self.stop()

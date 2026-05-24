@@ -7,11 +7,18 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, QObject, Signal
 from PySide6.QtWidgets import QApplication
 
 from backend import API, ConfigManager, init_logger, SystemTray
 from ui import MainWindow
+
+
+class _TrayBridge(QObject):
+    """将 pystray 回调从托盘线程桥接到 Qt 主线程"""
+    show = Signal()
+    settings = Signal()
+    quit = Signal()
 
 
 def main():
@@ -74,6 +81,7 @@ def main():
     # ================================================================
 
     tray = SystemTray()
+    bridge = _TrayBridge()
 
     def on_tray_show():
         logger.info("托盘：显示窗口")
@@ -81,13 +89,27 @@ def main():
         window.raise_()
         window.activateWindow()
 
+    def on_tray_settings():
+        logger.info("托盘：打开设置")
+        on_tray_show()
+        window.show_settings()
+
     def on_tray_quit():
         logger.info("托盘：退出")
         api.shutdown()
         tray.stop()
         QApplication.quit()
 
-    tray.setup(on_tray_show, on_tray_quit)
+    # pystray 回调在独立线程，通过 signal 桥接回 Qt 主线程
+    bridge.show.connect(on_tray_show)
+    bridge.settings.connect(on_tray_settings)
+    bridge.quit.connect(on_tray_quit)
+
+    tray.setup(
+        on_show=lambda: bridge.show.emit(),
+        on_settings=lambda: bridge.settings.emit(),
+        on_quit=lambda: bridge.quit.emit(),
+    )
     tray.run_in_thread()
 
     # ================================================================
