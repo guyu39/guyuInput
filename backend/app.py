@@ -224,6 +224,10 @@ class API(QObject):
 
             self._reset_silence_timer()
             self.recording_started.emit(self.dispatcher.current_engine_name)
+
+            # 离线模式无流式输出，显示占位文字避免主显示区域空白
+            if self.dispatcher.current_engine_name == "offline":
+                self.asr_partial.emit("正在聆听...")
         except Exception as e:
             logger.error(f"启动录音失败: {e}")
             self.recording_error.emit(str(e))

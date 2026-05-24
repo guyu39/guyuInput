@@ -144,3 +144,27 @@ e.feed_audio(np.zeros(16000, dtype=np.float32))
 e.stop()
 "
 ```
+
+## 开源引用
+
+本项目使用了以下开源项目，按其各自许可证分发：
+
+| 项目 | 用途 | 许可证 | 链接 |
+|------|------|--------|------|
+| sherpa-onnx | 离线语音识别引擎 | Apache 2.0 | https://github.com/k2-fsa/sherpa-onnx |
+| SenseVoice | 离线 ASR 模型 | Apache 2.0 | https://github.com/FunAudioLLM/SenseVoice |
+| PySide6 | Qt UI 框架 | LGPL 3.0 | https://www.qt.io |
+| sounddevice | 音频采集 | MIT | https://github.com/spatialaudio/python-sounddevice |
+| keyboard | 全局快捷键 | MIT | https://github.com/boppreh/keyboard |
+| pystray | 系统托盘 | LGPL 3.0 | https://github.com/moses-palmer/pystray |
+| silero-vad | 语音活动检测 | MIT | https://github.com/snakers4/silero-vad |
+
+本项目原创部分包括：
+- 产品设计、交互逻辑与 UI 实现（[ui/](ui/) 目录下所有组件）
+- 多供应商 ASR 调度器与自动降级策略（[backend/asr/dispatcher.py](backend/asr/dispatcher.py)）
+- 各在线 ASR 供应商的 WebSocket 客户端实现（[backend/asr/](backend/asr/) 下 xunfei / ali / doubao / minimax）
+- Win32 文本注入模块（[backend/input.py](backend/input.py)）
+- 音频采集封装与音量检测（[backend/audio.py](backend/audio.py)）
+- 全局快捷键管理与注入抑制（[backend/hotkey.py](backend/hotkey.py)）
+- Qt 窗口管理、视图切换与拖拽支持（[ui/main_window.py](ui/main_window.py)）
+- SQLite 配置管理（[backend/config.py](backend/config.py)）
