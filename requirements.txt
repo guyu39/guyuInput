@@ -16,3 +16,6 @@ pillow>=10.0.0
 
 # 离线 ASR
 sherpa-onnx>=1.10.0
+
+# 词典校正
+flashtext>=2.7

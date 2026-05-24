@@ -6,6 +6,8 @@ from .hotkey import HotkeyManager
 from .input import TextInjector
 from .tray import SystemTray
 from .asr import ASRDispatcher, XunfeiASR, SherpaOnnxEngine, ASRResult, ASRMode
+from .dictionary import DictionaryCorrector
+from .polish import PolishDispatcher, OpenAIPolisher, DoubaoPolisher, PolishMode
 
 __all__ = [
     'API',
@@ -21,4 +23,9 @@ __all__ = [
     'SherpaOnnxEngine',
     'ASRResult',
     'ASRMode',
+    'DictionaryCorrector',
+    'PolishDispatcher',
+    'OpenAIPolisher',
+    'DoubaoPolisher',
+    'PolishMode',
 ]
