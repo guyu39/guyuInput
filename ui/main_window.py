@@ -92,6 +92,8 @@ class MainWindow(QMainWindow):
         self._set_window_size(64, 64, circular=True)
 
     def show_recording(self, engine: str = ""):
+        if self.isHidden():
+            self.show()
         self._update_activation(False)
         self.recording.set_engine(engine)
         self.recording.set_text("")
@@ -143,16 +145,10 @@ class MainWindow(QMainWindow):
         self.resize(w, h)
         self.stack.setFixedSize(w, h)
 
-        if circular:
-            region = QRegion(0, 0, w, h, QRegion.Ellipse)
-            self.setMask(region)
-        else:
-            self.setMask(QRegion())
-
-        # Qt 的 setMask / resize 可能覆盖窗口样式，仅在非激活模式下加回
-        if not self._allow_activate:
-            self._apply_ws_ex_noactivate()
-
+        # 修复 1：彻底移除原先的 QRegion 遮罩逻辑！
+        # 只要清空遮罩，Qt 的 WA_TranslucentBackground 就会接管，完美展示透明和抗锯齿边缘
+        self.clearMask()
+        
     def _connect_signals(self):
         self.idle.clicked.connect(lambda: self.start_recording_signal.emit(-1))
         self.idle.settings_requested.connect(self.show_settings)

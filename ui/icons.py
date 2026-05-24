@@ -163,12 +163,17 @@ class IconButton(QWidget):
         bg = self.hover_color if self._hovered else self.bg_color
         painter.setBrush(QBrush(bg))
         painter.setPen(Qt.NoPen)
-        r = min(self.width(), self.height()) / 2 - 1
-        painter.drawEllipse(self.rect().center(), r, r)
+        
+        # 修复 1：明确使用浮点数，并稍微多留 0.5 像素的边距给抗锯齿
+        r = min(self.width(), self.height()) / 2.0 - 1.5 
+        
+        # 修复 2：使用 QRectF 获取精准的浮点中心点 (20.0, 20.0)
+        center_point = QRectF(self.rect()).center()
+        
+        painter.drawEllipse(center_point, r, r)
 
         # 图标
         self.draw_fn(painter, QRectF(self.rect()), self.icon_color)
-
     def enterEvent(self, event):
         self._hovered = True
         self.update()

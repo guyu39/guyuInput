@@ -13,25 +13,33 @@ VALID_MODIFIERS = {'ctrl', 'alt', 'shift', 'win'}
 
 
 class HotkeyManager:
-    """全局快捷键管理器 - 支持按住录音 / 松开停止"""
+    """全局快捷键管理器 - 支持按住录音 / 松开停止，或单按切换"""
 
-    def __init__(self, hotkey_str: str = "ctrl+alt+v"):
+    def __init__(self, hotkey_str: str = "ctrl+alt+v", toggle_mode: bool = True):
         self.hotkey_str = hotkey_str
         self._is_pressed = False
         self._on_press: Optional[Callable] = None
         self._on_release: Optional[Callable] = None
+        self._on_toggle: Optional[Callable] = None
         self._hook_id = None
         self._required_mods: set[str] = set()
         self._main_keys: set[str] = set()
         self._suppressed = False
+        self._toggle_mode = toggle_mode
         self._parse_hotkey()
 
-    def register_callbacks(self, on_press: Callable, on_release: Callable):
-        """注册按下 / 松开回调"""
+    def register_callbacks(self, on_press: Callable = None, on_release: Callable = None):
+        """注册按下 / 松开回调（hold 模式）"""
         self._on_press = on_press
         self._on_release = on_release
         self._register_hook()
-        logger.info(f"快捷键已注册: {self.hotkey_str}")
+        logger.info(f"快捷键已注册 (按住模式): {self.hotkey_str}")
+
+    def register_toggle_callback(self, on_toggle: Callable):
+        """注册单按切换回调（toggle 模式）"""
+        self._on_toggle = on_toggle
+        self._register_hook()
+        logger.info(f"快捷键已注册 (切换模式): {self.hotkey_str}")
 
     def set_hotkey(self, hotkey_str: str) -> bool:
         """更换快捷键"""
@@ -78,8 +86,9 @@ class HotkeyManager:
             if e.event_type not in ('down', 'up'):
                 return
 
-            # 快速检查：修饰键数量不对就跳过
             mods = self._get_active_mods()
+
+            # 修饰键不匹配时，处理释放
             if mods != self._required_mods:
                 if self._is_pressed and e.event_type == 'up':
                     self._is_pressed = False
@@ -87,8 +96,15 @@ class HotkeyManager:
                         self._on_release()
                 return
 
-            # 检查是否匹配主键
-            if e.name.lower() in self._main_keys:
+            if e.name.lower() not in self._main_keys:
+                return
+
+            if self._toggle_mode:
+                # 单按切换：仅响应 down 事件，每次按下切换录音状态
+                if e.event_type == 'down' and self._on_toggle:
+                    self._on_toggle()
+            else:
+                # 按住模式：press 开始，release 停止
                 if e.event_type == 'down' and not self._is_pressed:
                     self._is_pressed = True
                     if self._on_press:
