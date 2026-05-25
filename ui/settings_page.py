@@ -112,6 +112,10 @@ class SettingsPage(QWidget):
 
         # ── 音频设备 ──
         self._build_audio_section(cv)
+        cv.addWidget(_divider())
+
+        # ── 文本后处理 ──
+        self._build_postprocess_section(cv)
 
         scroll.setWidget(content)
         layout.addWidget(scroll, 1)
@@ -384,6 +388,99 @@ class SettingsPage(QWidget):
         except (json.JSONDecodeError, KeyError):
             pass
 
+    # ================================================================
+    # 文本后处理区块
+    # ================================================================
+
+    def _build_postprocess_section(self, parent_layout):
+        parent_layout.addWidget(_section_label("文本后处理"))
+
+        # 词典校正开关
+        parent_layout.addWidget(_sub_label("词典校正"))
+        self._dict_toggle = _NoWheelCombo()
+        self._dict_toggle.setStyleSheet(_combo_style())
+        self._dict_toggle.addItems(["开启", "关闭"])
+        self._dict_toggle.currentIndexChanged.connect(
+            lambda i: self.config_changed.emit("dictionary_enabled", "true" if i == 0 else "false")
+        )
+        parent_layout.addWidget(self._dict_toggle)
+
+        # AI 润色开关
+        parent_layout.addWidget(_sub_label("AI 润色"))
+        self._polish_toggle = _NoWheelCombo()
+        self._polish_toggle.setStyleSheet(_combo_style())
+        self._polish_toggle.addItems(["关闭", "开启"])
+        self._polish_toggle.currentIndexChanged.connect(
+            lambda i: self.config_changed.emit("polish_enabled", "true" if i == 1 else "false")
+        )
+        parent_layout.addWidget(self._polish_toggle)
+
+        # 润色供应商
+        parent_layout.addWidget(_sub_label("润色供应商"))
+        self._polish_prov_combo = _NoWheelCombo()
+        self._polish_prov_combo.setStyleSheet(_combo_style())
+        self._polish_prov_combo.addItems(["OpenAI", "豆包", "DeepSeek", "自定义"])
+        self._polish_prov_combo.currentIndexChanged.connect(
+            lambda i: self._on_polish_provider_change(["openai", "doubao", "deepseek", "custom"][i])
+        )
+        parent_layout.addWidget(self._polish_prov_combo)
+
+        # API Key
+        parent_layout.addWidget(_sub_label("API Key"))
+        self._polish_key_edit = QLineEdit()
+        self._polish_key_edit.setEchoMode(QLineEdit.Password)
+        self._polish_key_edit.setPlaceholderText("输入 API Key")
+        self._polish_key_edit.setStyleSheet(_input_style())
+        self._polish_key_edit.editingFinished.connect(self._save_polish_key)
+        parent_layout.addWidget(self._polish_key_edit)
+
+        # 模型
+        parent_layout.addWidget(_sub_label("模型"))
+        self._polish_model_combo = _NoWheelCombo()
+        self._polish_model_combo.setStyleSheet(_combo_style())
+        self._polish_model_combo.setEditable(True)
+        self._polish_model_combo.addItems([
+            "gpt-4o-mini", "gpt-4o", "gpt-3.5-turbo",
+            "doubao-pro-32k", "doubao-lite-32k",
+            "deepseek-chat",
+        ])
+        self._polish_model_combo.lineEdit().editingFinished.connect(
+            lambda: self.config_changed.emit("polish_model", self._polish_model_combo.currentText())
+        )
+        parent_layout.addWidget(self._polish_model_combo)
+
+        # 自定义 URL
+        parent_layout.addWidget(_sub_label("自定义 URL（可选）"))
+        self._polish_url_edit = QLineEdit()
+        self._polish_url_edit.setPlaceholderText("https://api.openai.com/v1")
+        self._polish_url_edit.setStyleSheet(_input_style())
+        self._polish_url_edit.editingFinished.connect(self._save_polish_url)
+        parent_layout.addWidget(self._polish_url_edit)
+
+        # 润色强度
+        parent_layout.addWidget(_sub_label("润色强度"))
+        self._polish_mode_combo = _NoWheelCombo()
+        self._polish_mode_combo.setStyleSheet(_combo_style())
+        self._polish_mode_combo.addItems(["仅标点", "适度润色（推荐）", "深度润色"])
+        self._polish_mode_combo.currentIndexChanged.connect(
+            lambda i: self.config_changed.emit("polish_mode", ["light", "moderate", "deep"][i])
+        )
+        parent_layout.addWidget(self._polish_mode_combo)
+
+    def _on_polish_provider_change(self, provider: str):
+        self.config_changed.emit("polish_provider", provider)
+        # 切换供应商时更新默认模型
+        default_models = {"openai": "gpt-4o-mini", "doubao": "doubao-pro-32k",
+                          "deepseek": "deepseek-chat", "custom": ""}
+        if provider in default_models:
+            self._polish_model_combo.setCurrentText(default_models[provider])
+
+    def _save_polish_key(self):
+        self.config_changed.emit("polish_api_key", self._polish_key_edit.text())
+
+    def _save_polish_url(self):
+        self.config_changed.emit("polish_base_url", self._polish_url_edit.text())
+
     def load_config(self, config_json: str):
         try:
             cfg = json.loads(config_json or "{}")
@@ -412,6 +509,22 @@ class SettingsPage(QWidget):
                 prov_index = {"xunfei": 0, "doubao": 1, "ali": 2, "minimax": 3}.get(provider, 0)
                 self._prov_combo.setCurrentIndex(prov_index)
                 self._rebuild_cred_fields(provider)
+
+            # 恢复后处理配置
+            dict_enabled = cfg.get("dictionary_enabled", "true")
+            self._dict_toggle.setCurrentIndex(0 if dict_enabled == "true" else 1)
+            polish_enabled = cfg.get("polish_enabled", "false")
+            self._polish_toggle.setCurrentIndex(1 if polish_enabled == "true" else 0)
+            polish_prov = cfg.get("polish_provider", "openai")
+            prov_index = {"openai": 0, "doubao": 1, "deepseek": 2, "custom": 3}.get(polish_prov, 0)
+            self._polish_prov_combo.setCurrentIndex(prov_index)
+            self._polish_key_edit.setText(cfg.get("polish_api_key", ""))
+            model = cfg.get("polish_model", "gpt-4o-mini")
+            self._polish_model_combo.setCurrentText(model)
+            self._polish_url_edit.setText(cfg.get("polish_base_url", ""))
+            polish_mode = cfg.get("polish_mode", "moderate")
+            mode_index = {"light": 0, "moderate": 1, "deep": 2}.get(polish_mode, 1)
+            self._polish_mode_combo.setCurrentIndex(mode_index)
         except (json.JSONDecodeError, KeyError):
             pass
 

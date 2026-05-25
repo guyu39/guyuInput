@@ -20,6 +20,8 @@ from .asr import (
     ASRDispatcher, XunfeiASR, AliASR, DoubaoASR, MiniMaxASR,
     SherpaOnnxEngine, ASRResult, ASRMode,
 )
+from .dictionary import DictionaryCorrector
+from .polish import PolishDispatcher, OpenAIPolisher, DoubaoPolisher, PolishMode
 
 logger = logging.getLogger('guyuInput')
 
@@ -39,6 +41,7 @@ class API(QObject):
     asr_partial = Signal(str)             # partial recognition text
     asr_final = Signal(str)               # final recognition text
     asr_error = Signal(str)               # ASR error
+    asr_status = Signal(str)              # status hint (聆听中/识别中/润色中)
     config_loaded = Signal(str)           # all config as JSON
     devices_loaded = Signal(str)          # audio devices JSON
     window_resize = Signal(int, int)      # width, height
@@ -83,16 +86,28 @@ class API(QObject):
         )
         self.dispatcher.set_provider(provider)
 
+        # 词典校正（默认启用）
+        self.dict_corrector = DictionaryCorrector()
+        if self.config.get_bool('dictionary_enabled', True):
+            try:
+                sections_json = self.config.get('dictionary_sections', '')
+                sections = json.loads(sections_json) if sections_json else None
+                self.dict_corrector.load(sections)
+            except Exception as e:
+                logger.warning(f"词典加载失败: {e}")
+
+        # AI 润色（默认关闭，需用户配置 API）
+        self.polish_dispatcher = PolishDispatcher()
+        self._sync_polisher()
+
         # 录音状态
+        self._recording = False
         self._recognized_text: str = ""
         self._accumulated_text: str = ""
         self._silence_timer: Optional[threading.Timer] = None
 
-        # 绑定快捷键
-        self.hotkey.register_callbacks(
-            on_press=self._on_hotkey_press,
-            on_release=self._on_hotkey_release,
-        )
+        # 绑定快捷键（单按切换模式）
+        self.hotkey.register_toggle_callback(on_toggle=self._on_hotkey_toggle)
 
     def _init_engines(self):
         """根据配置初始化所有在线引擎"""
@@ -110,6 +125,34 @@ class API(QObject):
         for key in self.PROVIDER_KEYS[provider]:
             val = self.config.get(f"{provider}_{key}", "")
             setattr(engine, key, val)
+
+    def _sync_polisher(self):
+        """根据配置重建润色器实例"""
+        if not self.config.get_bool('polish_enabled', False):
+            self.polish_dispatcher.set_polisher(None)
+            return
+
+        api_key = self.config.get('polish_api_key', '')
+        if not api_key:
+            self.polish_dispatcher.set_polisher(None)
+            return
+
+        provider = self.config.get('polish_provider', 'openai')
+        model = self.config.get('polish_model', 'gpt-4o-mini')
+        base_url = self.config.get('polish_base_url', '')
+
+        try:
+            if provider == 'doubao':
+                endpoint = base_url or "https://ark.cn-beijing.volces.com/api/v3/chat/completions"
+                polisher = DoubaoPolisher(api_key=api_key, model=model, endpoint=endpoint)
+            else:
+                url = base_url or "https://api.openai.com/v1"
+                polisher = OpenAIPolisher(api_key=api_key, base_url=url, model=model)
+            self.polish_dispatcher.set_polisher(polisher)
+            logger.info(f"润色器已就绪: {provider}/{model}")
+        except Exception as e:
+            logger.warning(f"润色器初始化失败: {e}")
+            self.polish_dispatcher.set_polisher(None)
 
     # ================================================================
     # 基础方法（由 main.py 直接调用）
@@ -132,11 +175,21 @@ class API(QObject):
                     self.offline_engine.preload_async()
             elif key == 'asr_provider':
                 self.dispatcher.set_provider(value)
-            # 凭证相关：更新对应引擎
+            # ASR 凭证相关
             for provider in self.PROVIDER_KEYS:
                 if key.startswith(f"{provider}_"):
                     self._sync_engine_creds(provider)
                     break
+            # 润色 / 词典配置
+            polish_keys = {'polish_enabled', 'polish_provider', 'polish_api_key',
+                           'polish_model', 'polish_base_url', 'polish_mode'}
+            if key in polish_keys:
+                self._sync_polisher()
+            elif key == 'dictionary_enabled':
+                if value.lower() == 'true':
+                    sections_json = self.config.get('dictionary_sections', '')
+                    sections = json.loads(sections_json) if sections_json else None
+                    self.dict_corrector.load(sections)
             return True
         except Exception as e:
             logger.error(f"Set config failed: {e}")
@@ -241,21 +294,23 @@ class API(QObject):
             )
 
             self._reset_silence_timer()
+            self._recording = True
             self.recording_started.emit(self.dispatcher.current_engine_name)
 
-            # 离线模式无流式输出，显示占位文字避免主显示区域空白
+            # 离线模式无流式输出，显示状态提示避免主区域空白
             if self.dispatcher.current_engine_name == "offline":
-                self.asr_partial.emit("正在聆听...")
+                self.asr_status.emit("正在聆听...")
         except Exception as e:
             logger.error(f"启动录音失败: {e}")
             self.recording_error.emit(str(e))
 
     def stop_recording(self, confirm: bool = True):
+        self._recording = False
         self.audio.stop()
 
         # 离线模式：先刷新 UI 显示"识别中..."，再同步阻塞识别
         if confirm and self.dispatcher.current_engine_name == "offline":
-            self.asr_partial.emit("识别中...")
+            self.asr_status.emit("识别中...")
             QApplication.processEvents()
 
         self.dispatcher.stop()
@@ -263,6 +318,24 @@ class API(QObject):
 
         if confirm and self._recognized_text.strip():
             text = self._recognized_text.strip()
+
+            # 一级：词典校正（默认启用，< 1ms）
+            if self.config.get_bool('dictionary_enabled', True):
+                text = self.dict_corrector.correct(text)
+
+            # 二级：AI 润色（默认关闭，跳过过短文本）
+            if (self.config.get_bool('polish_enabled', False)
+                    and self.polish_dispatcher.is_available
+                    and len(text) >= 3):
+                self.asr_status.emit("润色中...")
+                QApplication.processEvents()
+                mode_str = self.config.get('polish_mode', 'moderate')
+                try:
+                    mode = PolishMode(mode_str)
+                except ValueError:
+                    mode = PolishMode.MODERATE
+                text = self.polish_dispatcher.polish(text, mode)
+
             self.hotkey.suppress_temporarily(0.5)
             self.injector.inject_text(text)
             self.recording_stopped.emit(text, True)
@@ -307,6 +380,7 @@ class API(QObject):
         else:
             self._accumulated_text += result.text
             self._recognized_text = self._accumulated_text
+            self.asr_status.emit("")  # 识别完成，清除状态提示
             self.asr_final.emit(self._accumulated_text)
 
     def _on_asr_error(self, err: str):
@@ -314,13 +388,13 @@ class API(QObject):
         self.asr_error.emit(err)
 
     # ================================================================
-    # 快捷键回调
+    # 快捷键回调（单按切换模式）
     # ================================================================
 
-    def _on_hotkey_press(self):
-        logger.info("快捷键按下，开始录音")
-        self.start_recording()
-
-    def _on_hotkey_release(self):
-        logger.info("快捷键松开，停止录音")
-        self.stop_recording(confirm=True)
+    def _on_hotkey_toggle(self):
+        if self._recording:
+            logger.info("快捷键切换：停止录音")
+            self.stop_recording(confirm=True)
+        else:
+            logger.info("快捷键切换：开始录音")
+            self.start_recording()

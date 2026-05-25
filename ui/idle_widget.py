@@ -8,10 +8,11 @@ from PySide6.QtWidgets import QWidget
 
 from .icons import draw_mic, draw_x
 
-# 关闭按钮在 64×64 圆形中的位置 — 右上角，避开麦克风图标
-CLOSE_BTN_CX = 50    # 圆心 x
-CLOSE_BTN_CY = 12    # 圆心 y
-CLOSE_BTN_R = 7      # 半径
+# 关闭按钮 — 圆外右上角，避开麦克风图标和圆形区域
+# 圆形半径 30，中心 (32,32)，右上边缘约 (53,11)；按钮放在 (55,10) 确保在圆外
+CLOSE_BTN_CX = 55
+CLOSE_BTN_CY = 10
+CLOSE_BTN_R = 6
 
 
 class IdleWidget(QWidget):

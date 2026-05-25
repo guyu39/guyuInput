@@ -31,17 +31,28 @@ class AudioCapture:
 
     @staticmethod
     def list_devices() -> List[AudioDevice]:
-        """列出所有可用输入设备"""
+        """列出所有可用输入设备（过滤离线/不可用设备，按名称去重）"""
         devices = sd.query_devices()
         default_idx = sd.default.device[0]
+        seen: set[str] = set()
         result = []
         for i, d in enumerate(devices):
-            if d['max_input_channels'] > 0:
-                result.append(AudioDevice(
-                    id=i,
-                    name=d['name'],
-                    is_default=(i == default_idx)
-                ))
+            if d['max_input_channels'] <= 0:
+                continue
+            name = d['name']
+            if name in seen:
+                continue
+            # 尝试验证设备是否真正在线（断开连接的蓝牙等会失败）
+            try:
+                sd.check_input_settings(device=i, channels=1, samplerate=16000)
+            except sd.PortAudioError:
+                continue
+            seen.add(name)
+            result.append(AudioDevice(
+                id=i,
+                name=name,
+                is_default=(i == default_idx)
+            ))
         return result
 
     def start(

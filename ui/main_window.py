@@ -92,6 +92,8 @@ class MainWindow(QMainWindow):
         self._set_window_size(64, 64)
 
     def show_recording(self, engine: str = ""):
+        if self.isHidden():
+            self.show()
         self._update_activation(False)
         self.recording.set_engine(engine)
         self.recording.set_text("")

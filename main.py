@@ -59,6 +59,7 @@ def main():
     api.model_loading.connect(window.update_text)
     api.asr_partial.connect(window.update_text)
     api.asr_final.connect(window.update_text)
+    api.asr_status.connect(window.recording.show_status)
     def _on_asr_error(msg: str):
         api.stop_recording(confirm=False)
         window.show_error(msg, auto_dismiss_ms=5000)
