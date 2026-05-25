@@ -1,8 +1,9 @@
 """
 FunASR 离线语音识别引擎
-基于达摩院 Paraformer 流式模型
+基于达摩院 Paraformer 流式模型，支持异步预加载
 """
 import logging
+import threading
 from typing import Callable, Optional
 
 import numpy as np
@@ -16,7 +17,7 @@ DEFAULT_MODEL = "iic/speech_paraformer-large_asr_nat-zh-cn-16k-common-vocab8404-
 
 
 class FunASREngine(ASREngine):
-    """FunASR Paraformer 离线流式识别引擎"""
+    """FunASR Paraformer 离线流式识别引擎 — 支持异步预加载"""
 
     def __init__(self, model_name: str = DEFAULT_MODEL):
         super().__init__()
@@ -25,16 +26,46 @@ class FunASREngine(ASREngine):
         self._cache: dict = {}
         self._is_running = False
 
+        # 异步加载状态
+        self._loaded = False
+        self._loading = False
+        self._load_error: Optional[str] = None
+        self._load_lock = threading.Lock()
+        self._load_done = threading.Event()
+
     @property
     def is_running(self) -> bool:
         return self._is_running
 
-    def load_model(self):
-        """延迟加载模型 - 第一次使用离线模式时才加载，加速启动"""
-        if self._model is not None:
-            return
+    @property
+    def is_ready(self) -> bool:
+        """模型是否已加载完成"""
+        return self._loaded
 
-        logger.info(f"正在加载 FunASR 模型: {self.model_name}")
+    @property
+    def is_loading(self) -> bool:
+        """模型是否正在后台加载中"""
+        return self._loading
+
+    @property
+    def load_error(self) -> Optional[str]:
+        """加载失败的错误信息"""
+        return self._load_error
+
+    def preload_async(self):
+        """后台线程异步预加载模型，避免首次使用时卡 UI"""
+        with self._load_lock:
+            if self._loaded or self._loading:
+                return
+            self._loading = True
+            self._load_done.clear()
+
+        logger.info(f"后台预加载 FunASR 模型: {self.model_name}")
+        t = threading.Thread(target=self._load_worker, daemon=True, name="funasr-preload")
+        t.start()
+
+    def _load_worker(self):
+        """后台加载工作线程"""
         try:
             from funasr import AutoModel
             self._model = AutoModel(
@@ -43,14 +74,57 @@ class FunASREngine(ASREngine):
                 disable_pbar=True,
                 disable_log=True,
             )
-            logger.info("FunASR 模型加载完成")
+            self._loaded = True
+            logger.info("FunASR 模型预加载完成")
         except ImportError:
-            raise ImportError("离线引擎未安装，请切换到在线模式")
+            self._load_error = "离线引擎未安装，请切换到在线模式"
+            logger.warning("FunASR 未安装")
+        except Exception as e:
+            self._load_error = str(e)
+            logger.error(f"FunASR 模型加载失败: {e}")
+        finally:
+            with self._load_lock:
+                self._loading = False
+            self._load_done.set()
 
-    def start(self, on_result: Callable[[ASRResult], None], on_error: Optional[Callable[[str], None]] = None):
+    def load_model(self):
+        """同步加载模型 — 作为预加载失败或未启动时的后备方案
+
+        注意：若后台预加载进行中，此方法会阻塞等待。调用者应先通过
+        is_ready / is_loading 判断状态，避免在 GUI 线程阻塞。
+        """
+        with self._load_lock:
+            if self._loaded:
+                return
+            if not self._loading:
+                self._loading = True
+                self._load_done.clear()
+                self._load_worker()
+                return
+
+        # 已在后台加载中，等待完成
+        if self._loading and not self._loaded:
+            logger.info("等待 FunASR 模型加载完成...")
+            self._load_done.wait()
+
+        if self._load_error:
+            raise RuntimeError(self._load_error)
+
+    def wait_ready(self, timeout: float = 30.0) -> bool:
+        """轮询等待模型加载完成，适配 GUI 线程的 processEvents 注入
+
+        由调用者在循环中调用 QApplication.processEvents() 保持 UI 响应。
+        返回 True 表示加载完成，False 表示超时。
+        """
+        if self._loaded:
+            return True
+        return self._load_done.wait(timeout=timeout) and self._loaded
+
+    def start(self, on_result: Callable[[ASRResult], None],
+              on_error: Optional[Callable[[str], None]] = None):
         try:
             self.load_model()
-        except ImportError as e:
+        except RuntimeError as e:
             if on_error:
                 on_error(str(e))
             return
@@ -83,7 +157,6 @@ class FunASREngine(ASREngine):
             return
 
         try:
-            # 发送最后一帧获取最终结果
             res = self._model.generate(
                 input=np.zeros(1024, dtype=np.float32),
                 cache=self._cache,

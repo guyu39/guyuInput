@@ -5,6 +5,7 @@
 import logging
 import json
 import threading
+import time
 from typing import Optional
 
 import numpy as np
@@ -29,6 +30,7 @@ class API(QObject):
     # ================================================================
     # Qt 信号定义
     # ================================================================
+    model_loading = Signal(str)           # 模型加载状态提示
     recording_started = Signal(str)       # engine name
     recording_stopped = Signal(str, bool) # text, injected
     recording_error = Signal(str)         # error message
@@ -70,6 +72,7 @@ class API(QObject):
         self._online_engines = {}
         self._init_engines()
         self.offline_engine = SherpaOnnxEngine()
+        self.offline_engine.preload_async()  # 后台预加载，避免首次使用卡 UI
         self.asr_mode = ASRMode(config.get('asr_mode', 'auto'))
 
         provider = config.get('asr_provider', 'xunfei')
@@ -125,6 +128,8 @@ class API(QObject):
                     self.dispatcher.mode = ASRMode(value)
                 except ValueError:
                     pass
+                if value == 'offline':
+                    self.offline_engine.preload_async()
             elif key == 'asr_provider':
                 self.dispatcher.set_provider(value)
             # 凭证相关：更新对应引擎
@@ -209,6 +214,19 @@ class API(QObject):
                     provider_names = {"xunfei": "讯飞", "doubao": "豆包", "ali": "阿里", "minimax": "MiniMax"}
                     self.recording_error.emit(f"请先配置 {provider_names.get(provider, provider)} API 凭证")
                     return
+
+            # 离线引擎预加载等待：模型未就绪时显示状态并轮询，保持 UI 响应
+            engine = self.offline_engine
+            if self.dispatcher.mode in (ASRMode.OFFLINE, ASRMode.AUTO) and not engine.is_ready:
+                if engine.is_loading:
+                    # 提前显示录音窗口，让 UI 能展示加载状态
+                    self.recording_started.emit("offline")
+                    self.model_loading.emit("模型加载中...")
+                    QApplication.processEvents()
+                    while not engine.is_ready:
+                        time.sleep(0.05)
+                        QApplication.processEvents()
+                    self.model_loading.emit("")
 
             self.dispatcher.start(
                 on_result=self._on_asr_result,

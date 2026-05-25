@@ -5,6 +5,7 @@ from .ali import AliASR
 from .doubao import DoubaoASR
 from .minimax import MiniMaxASR
 from .sherpa_onnx_engine import SherpaOnnxEngine
+from .funasr_engine import FunASREngine
 
 __all__ = [
     'ASREngine',
@@ -16,4 +17,5 @@ __all__ = [
     'DoubaoASR',
     'MiniMaxASR',
     'SherpaOnnxEngine',
+    'FunASREngine',
 ]

@@ -97,7 +97,14 @@ class MainWindow(QMainWindow):
         self.recording.set_text("")
         self.recording.set_volume(0.0)
         self.stack.setCurrentWidget(self.recording)
-        self._set_window_size(280, 66, circular=False)
+        # 宽度固定，高度允许录音条动画伸缩（上限 3 行文字 ≈ 100px）
+        self.setMinimumSize(280, 48)
+        self.setMaximumSize(280, 100)
+        self.resize(280, 66)
+        self.stack.setFixedWidth(280)
+        self.stack.setFixedHeight(66)
+        self.setMask(QRegion())
+        self._apply_ws_ex_noactivate()
 
     def show_error(self, message: str, auto_dismiss_ms: int = 0):
         self._update_activation(False)
