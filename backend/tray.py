@@ -8,41 +8,51 @@ from PySide6.QtCore import Qt, QRectF, QPointF
 from PySide6.QtGui import (
     QPainter, QPixmap, QIcon, QColor, QPen, QAction, QPainterPath,
 )
-from PySide6.QtWidgets import QSystemTrayIcon, QMenu, QApplication
+from PySide6.QtWidgets import QSystemTrayIcon, QMenu
 
 logger = logging.getLogger('guyuInput')
 
 
-def _create_tray_icon(size: int = 32) -> QIcon:
-    pixmap = QPixmap(size, size)
-    pixmap.fill(Qt.transparent)
-    painter = QPainter(pixmap)
-    painter.setRenderHint(QPainter.Antialiasing)
+def _create_tray_icon() -> QIcon:
+    """生成托盘图标 — 多分辨率渲染，确保所有 DPI 下抗锯齿"""
+    icon = QIcon()
+    # Windows 托盘标准尺寸: 16×16 (100%), 32×32 (200%), 48×48 (300%)
+    for base in (16, 32, 48):
+        size = base * 2  # 2x 超采样
+        pixmap = QPixmap(size, size)
+        pixmap.setDevicePixelRatio(2.0)
+        pixmap.fill(Qt.transparent)
 
-    color = QColor(59, 130, 246)
-    pen = QPen(color, 2.0)
-    pen.setCapStyle(Qt.RoundCap)
-    pen.setJoinStyle(Qt.RoundJoin)
-    painter.setPen(pen)
-    painter.setBrush(Qt.NoBrush)
+        painter = QPainter(pixmap)
+        painter.setRenderHint(QPainter.Antialiasing)
+        painter.setRenderHint(QPainter.SmoothPixmapTransform)
 
-    cx = cy = size / 2
-    s = size / 24.0
+        color = QColor(59, 130, 246)
+        pen = QPen(color, base / 8.0)  # 笔宽随尺寸缩放
+        pen.setCapStyle(Qt.RoundCap)
+        pen.setJoinStyle(Qt.RoundJoin)
+        painter.setPen(pen)
+        painter.setBrush(Qt.NoBrush)
 
-    body = QPainterPath()
-    body.addRoundedRect(QRectF(cx - 3 * s, cy - 6 * s, 6 * s, 8 * s), 3 * s, 3 * s)
-    painter.drawPath(body)
+        cx = cy = size / 2
+        s = size / 24.0
 
-    arc = QPainterPath()
-    arc.moveTo(cx - 5 * s, cy - 3 * s)
-    arc.quadTo(cx, cy + 4 * s, cx + 5 * s, cy - 3 * s)
-    painter.drawPath(arc)
+        body = QPainterPath()
+        body.addRoundedRect(QRectF(cx - 3 * s, cy - 6 * s, 6 * s, 8 * s), 3 * s, 3 * s)
+        painter.drawPath(body)
 
-    painter.drawLine(QPointF(cx, cy + 1 * s), QPointF(cx, cy + 4 * s))
-    painter.drawLine(QPointF(cx - 3 * s, cy + 4 * s), QPointF(cx + 3 * s, cy + 4 * s))
+        arc = QPainterPath()
+        arc.moveTo(cx - 5 * s, cy - 3 * s)
+        arc.quadTo(cx, cy + 4 * s, cx + 5 * s, cy - 3 * s)
+        painter.drawPath(arc)
 
-    painter.end()
-    return QIcon(pixmap)
+        painter.drawLine(QPointF(cx, cy + 1 * s), QPointF(cx, cy + 4 * s))
+        painter.drawLine(QPointF(cx - 3 * s, cy + 4 * s), QPointF(cx + 3 * s, cy + 4 * s))
+
+        painter.end()
+        icon.addPixmap(pixmap)
+
+    return icon
 
 
 class SystemTray:
@@ -51,7 +61,7 @@ class SystemTray:
     def __init__(self):
         self._tray: QSystemTrayIcon | None = None
         self._menu: QMenu | None = None
-        self._icon: QIcon = _create_tray_icon(64)
+        self._icon: QIcon = _create_tray_icon()
 
     def setup(self, on_show: Callable, on_settings: Callable, on_quit: Callable):
         if not QSystemTrayIcon.isSystemTrayAvailable():
