@@ -89,7 +89,7 @@ class MainWindow(QMainWindow):
     def show_idle(self):
         self._update_activation(False)
         self.stack.setCurrentWidget(self.idle)
-        self._set_window_size(64, 64, circular=True)
+        self._set_window_size(64, 64)
 
     def show_recording(self, engine: str = ""):
         if self.isHidden():
@@ -99,13 +99,20 @@ class MainWindow(QMainWindow):
         self.recording.set_text("")
         self.recording.set_volume(0.0)
         self.stack.setCurrentWidget(self.recording)
-        self._set_window_size(280, 66, circular=False)
+        # 宽度固定，高度允许录音条动画伸缩（上限 3 行文字 ≈ 100px）
+        self.setMinimumSize(280, 48)
+        self.setMaximumSize(280, 100)
+        self.resize(280, 66)
+        self.stack.setFixedWidth(280)
+        self.stack.setFixedHeight(66)
+        self.setMask(QRegion())
+        self._apply_ws_ex_noactivate()
 
     def show_error(self, message: str, auto_dismiss_ms: int = 0):
         self._update_activation(False)
         self.error.set_message(message)
         self.stack.setCurrentWidget(self.error)
-        self._set_window_size(300, 44, circular=False)
+        self._set_window_size(300, 44)
         if auto_dismiss_ms > 0:
             QTimer.singleShot(auto_dismiss_ms, self.show_idle)
 
@@ -113,12 +120,12 @@ class MainWindow(QMainWindow):
         self._update_activation(True)
         self.guide.reset()
         self.stack.setCurrentWidget(self.guide)
-        self._set_window_size(480, 520, circular=False)
+        self._set_window_size(480, 520)
 
     def show_settings(self):
         self._update_activation(True)
         self.stack.setCurrentWidget(self.settings)
-        self._set_window_size(480, 580, circular=False)
+        self._set_window_size(480, 580)
 
     def update_volume(self, level: float):
         self.recording.set_volume(level)
@@ -139,16 +146,19 @@ class MainWindow(QMainWindow):
     # 内部
     # ================================================================
 
-    def _set_window_size(self, w: int, h: int, circular: bool = False):
+    def _set_window_size(self, w: int, h: int):
         self.setMinimumSize(w, h)
         self.setMaximumSize(w, h)
         self.resize(w, h)
         self.stack.setFixedSize(w, h)
 
-        # 修复 1：彻底移除原先的 QRegion 遮罩逻辑！
-        # 只要清空遮罩，Qt 的 WA_TranslucentBackground 就会接管，完美展示透明和抗锯齿边缘
-        self.clearMask()
-        
+        # 圆形窗口不设 QRegion mask — QRegion 是二值遮罩，无抗锯齿
+        # 依赖 WA_TranslucentBackground + idle widget 的 QPainter.Antialiasing 绘制圆形
+        self.setMask(QRegion())
+
+        # Qt 的 setMask / resize 可能覆盖窗口样式，重新加回 WS_EX_NOACTIVATE
+        self._apply_ws_ex_noactivate()
+
     def _connect_signals(self):
         self.idle.clicked.connect(lambda: self.start_recording_signal.emit(-1))
         self.idle.settings_requested.connect(self.show_settings)

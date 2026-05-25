@@ -7,21 +7,28 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from PySide6.QtCore import Qt, QObject, Signal
+from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QApplication
 
 from backend import API, ConfigManager, init_logger, SystemTray
 from ui import MainWindow
 
 
-class _TrayBridge(QObject):
-    """将 pystray 回调从托盘线程桥接到 Qt 主线程"""
-    show = Signal()
-    settings = Signal()
-    quit = Signal()
+def _setup_high_dpi():
+    """必须在 QApplication 创建前调用，确保 4K/高 DPI 显示器不虚化"""
+    # Qt 6: AA_EnableHighDpiScaling / AA_DisableHighDpiScaling 已废弃（始终开启）
+    # 关键：设置缩放因子舍入策略为 PassThrough，避免 Qt 对非整数缩放比取整导致发虚
+    QApplication.setHighDpiScaleFactorRoundingPolicy(
+        Qt.HighDpiScaleFactorRoundingPolicy.PassThrough
+    )
+    # 适配 Windows 自定义缩放的字体渲染
+    if hasattr(Qt, 'AA_Use96Dpi'):
+        QApplication.setAttribute(Qt.AA_Use96Dpi, False)
 
 
 def main():
+    _setup_high_dpi()
+
     logger = init_logger()
     logger.info("=" * 50)
     logger.info("guyuInput (Qt) 启动中...")
@@ -49,6 +56,7 @@ def main():
     api.recording_error.connect(lambda msg: window.show_error(msg, auto_dismiss_ms=3000))
     api.volume_changed.connect(window.update_volume)
     api.silence_timeout.connect(lambda: window.show_error("未检测到语音，即将关闭", auto_dismiss_ms=2000))
+    api.model_loading.connect(window.update_text)
     api.asr_partial.connect(window.update_text)
     api.asr_final.connect(window.update_text)
     api.asr_status.connect(window.recording.show_status)
@@ -78,11 +86,8 @@ def main():
     api.load_devices()
 
     # ================================================================
-    # 系统托盘
+    # 系统托盘 — Qt 原生 QSystemTrayIcon，主线程运行，无需跨线程桥接
     # ================================================================
-
-    tray = SystemTray()
-    bridge = _TrayBridge()
 
     def on_tray_show():
         logger.info("托盘：显示窗口")
@@ -90,28 +95,20 @@ def main():
         window.raise_()
         window.activateWindow()
 
-    def on_tray_settings():
-        logger.info("托盘：打开设置")
-        on_tray_show()
-        window.show_settings()
-
     def on_tray_quit():
         logger.info("托盘：退出")
-        api.shutdown()
-        tray.stop()
         QApplication.quit()
 
-    # pystray 回调在独立线程，通过 signal 桥接回 Qt 主线程
-    bridge.show.connect(on_tray_show)
-    bridge.settings.connect(on_tray_settings)
-    bridge.quit.connect(on_tray_quit)
-
+    tray = SystemTray()
     tray.setup(
-        on_show=lambda: bridge.show.emit(),
-        on_settings=lambda: bridge.settings.emit(),
-        on_quit=lambda: bridge.quit.emit(),
+        on_show=on_tray_show,
+        on_settings=lambda: (on_tray_show(), window.show_settings()),
+        on_quit=on_tray_quit,
     )
-    tray.run_in_thread()
+
+    # 退出前清理
+    app.aboutToQuit.connect(api.shutdown)
+    app.aboutToQuit.connect(tray.stop)
 
     # ================================================================
     # 启动

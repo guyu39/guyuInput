@@ -1,7 +1,8 @@
 """
 录音状态条 - 取消 / 文字回显 / 确认
+文字增多时窗口高度平滑展开，避免硬切变
 """
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import Qt, Signal, QEasingCurve, QVariantAnimation
 from PySide6.QtGui import QColor, QPainter, QBrush
 from PySide6.QtWidgets import QWidget, QHBoxLayout, QPushButton, QTextEdit
 
@@ -13,13 +14,15 @@ CONFIRM_COLOR = QColor(34, 197, 94)
 
 TEXT_MAX_LINES = 3
 LINE_HEIGHT = 18
+ANIM_DURATION = 180  # ms
+ANIM_MIN_DELTA = 2    # 高度差小于此值跳过动画
 
 STATUS_COLOR = "#94a3b8"  # 状态提示灰
 TEXT_COLOR = "#f1f5f9"    # 识别文字白
 
 
 class RecordingWidget(QWidget):
-    """录音状态条"""
+    """录音状态条 — 带高度展开动画"""
 
     cancel = Signal()
     confirm = Signal()
@@ -29,7 +32,7 @@ class RecordingWidget(QWidget):
         self.setMinimumWidth(200)
         self.setMaximumWidth(360)
         self._volume = 0.0
-        self._is_status = False
+        self._height_anim: QVariantAnimation | None = None
 
         layout = QHBoxLayout(self)
         layout.setContentsMargins(6, 4, 6, 4)
@@ -120,7 +123,47 @@ class RecordingWidget(QWidget):
         line_count = max(1, content_h // LINE_HEIGHT)
         visible_lines = min(line_count, TEXT_MAX_LINES)
         h = max(48, 12 + visible_lines * LINE_HEIGHT + 4)
+        self._animate_height(h)
+
+    # ----------------------------------------------------------------
+    # 高度展开动画
+    # ----------------------------------------------------------------
+
+    def _animate_height(self, target_h: int):
+        current_h = self.height()
+        if abs(current_h - target_h) < ANIM_MIN_DELTA:
+            self.setFixedHeight(target_h)
+            self._sync_window_height(target_h)
+            return
+
+        if self._height_anim and self._height_anim.state() == QVariantAnimation.Running:
+            self._height_anim.stop()
+
+        self._height_anim = QVariantAnimation(self)
+        self._height_anim.setDuration(ANIM_DURATION)
+        self._height_anim.setStartValue(current_h)
+        self._height_anim.setEndValue(target_h)
+        self._height_anim.setEasingCurve(QEasingCurve.InOutCubic)
+        self._height_anim.valueChanged.connect(self._on_anim_tick)
+        self._height_anim.start()
+
+    def _on_anim_tick(self, value):
+        h = int(value)
         self.setFixedHeight(h)
+        self._sync_window_height(h)
+
+    def _sync_window_height(self, h: int):
+        """同步主窗口和视图栈高度，让窗口跟随录音条平滑伸缩"""
+        win = self.window()
+        if not win:
+            return
+        # 录音条高度 = 窗口高度（stack 无 margin），同步 resize
+        win.resize(win.width(), h)
+        # 视图栈也需同步，否则子 widget 被裁剪
+        if hasattr(win, 'stack'):
+            win.stack.setFixedHeight(h)
+
+    # ----------------------------------------------------------------
 
     def resizeEvent(self, event):
         super().resizeEvent(event)

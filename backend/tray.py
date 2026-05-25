@@ -1,117 +1,107 @@
 """
-系统托盘模块 - 基于 pystray 的托盘图标和菜单
-左键点击 → 显示窗口；右键点击 → 设置 / 退出
+系统托盘模块 - Qt 原生 QSystemTrayIcon + QMenu
 """
 import logging
-import threading
-from typing import Callable, Optional
+from typing import Callable
 
-import pystray
-from PIL import Image, ImageDraw
+from PySide6.QtCore import Qt, QRectF, QPointF
+from PySide6.QtGui import (
+    QPainter, QPixmap, QIcon, QColor, QPen, QAction, QPainterPath,
+)
+from PySide6.QtWidgets import QSystemTrayIcon, QMenu
 
 logger = logging.getLogger('guyuInput')
 
 
-def _create_icon_image(size: int = 32) -> Image.Image:
-    """生成麦克风托盘图标"""
-    img = Image.new('RGBA', (size, size), (0, 0, 0, 0))
-    draw = ImageDraw.Draw(img)
+def _create_tray_icon() -> QIcon:
+    """生成托盘图标 — 多分辨率渲染，确保所有 DPI 下抗锯齿"""
+    icon = QIcon()
+    # Windows 托盘标准尺寸: 16×16 (100%), 32×32 (200%), 48×48 (300%)
+    for base in (16, 32, 48):
+        size = base * 2  # 2x 超采样
+        pixmap = QPixmap(size, size)
+        pixmap.setDevicePixelRatio(2.0)
+        pixmap.fill(Qt.transparent)
 
-    margin = size // 6
-    r = (size - 2 * margin) // 2
-    cx, cy = size // 2, size // 2
+        painter = QPainter(pixmap)
+        painter.setRenderHint(QPainter.Antialiasing)
+        painter.setRenderHint(QPainter.SmoothPixmapTransform)
 
-    # 麦克风主体（椭圆）
-    body_top = margin
-    body_bottom = cy - r // 3
-    body_left = cx - r // 2
-    body_right = cx + r // 2
-    draw.rounded_rectangle(
-        [body_left, body_top, body_right, body_bottom],
-        radius=size // 8,
-        fill=(59, 130, 246)  # blue-500
-    )
+        color = QColor(59, 130, 246)
+        pen = QPen(color, base / 8.0)  # 笔宽随尺寸缩放
+        pen.setCapStyle(Qt.RoundCap)
+        pen.setJoinStyle(Qt.RoundJoin)
+        painter.setPen(pen)
+        painter.setBrush(Qt.NoBrush)
 
-    # 底座弧线
-    arc_bbox = [cx - r, cy - r // 3, cx + r, cy + r]
-    draw.arc(arc_bbox, start=0, end=180, fill=(59, 130, 246), width=size // 8)
+        cx = cy = size / 2
+        s = size / 24.0
 
-    return img
+        body = QPainterPath()
+        body.addRoundedRect(QRectF(cx - 3 * s, cy - 6 * s, 6 * s, 8 * s), 3 * s, 3 * s)
+        painter.drawPath(body)
+
+        arc = QPainterPath()
+        arc.moveTo(cx - 5 * s, cy - 3 * s)
+        arc.quadTo(cx, cy + 4 * s, cx + 5 * s, cy - 3 * s)
+        painter.drawPath(arc)
+
+        painter.drawLine(QPointF(cx, cy + 1 * s), QPointF(cx, cy + 4 * s))
+        painter.drawLine(QPointF(cx - 3 * s, cy + 4 * s), QPointF(cx + 3 * s, cy + 4 * s))
+
+        painter.end()
+        icon.addPixmap(pixmap)
+
+    return icon
 
 
 class SystemTray:
-    """系统托盘管理"""
+    """Qt 原生系统托盘"""
 
     def __init__(self):
-        self._tray: Optional[pystray.Icon] = None
-        self._on_show: Optional[Callable] = None
-        self._on_settings: Optional[Callable] = None
-        self._on_quit: Optional[Callable] = None
-        self._running = False
+        self._tray: QSystemTrayIcon | None = None
+        self._menu: QMenu | None = None
+        self._icon: QIcon = _create_tray_icon()
 
     def setup(self, on_show: Callable, on_settings: Callable, on_quit: Callable):
-        """设置回调"""
-        self._on_show = on_show
-        self._on_settings = on_settings
-        self._on_quit = on_quit
-
-    def run(self):
-        """启动托盘（阻塞）"""
-        if self._running:
+        if not QSystemTrayIcon.isSystemTrayAvailable():
+            logger.warning("系统托盘不可用")
             return
 
-        image = _create_icon_image()
+        self._tray = QSystemTrayIcon(self._icon)
+        self._tray.setToolTip("guyuInput 语音输入法")
 
-        menu = pystray.Menu(
-            pystray.MenuItem(
-                "显示窗口",
-                self._handle_show,
-                default=True,          # 左键点击直接显示窗口
-            ),
-            pystray.MenuItem(
-                "设置",
-                self._handle_settings,
-            ),
-            pystray.Menu.SEPARATOR,
-            pystray.MenuItem(
-                "退出",
-                self._handle_quit,
-            ),
+        self._menu = QMenu()
+        self._menu.setWindowFlags(
+            self._menu.windowFlags() | Qt.NoDropShadowWindowHint
         )
 
-        self._tray = pystray.Icon(
-            "guyuInput",
-            image,
-            "guyuInput 语音输入法",
-            menu,
-        )
-        self._running = True
-        logger.info("系统托盘启动")
-        self._tray.run()
+        show_act = self._menu.addAction("显示窗口")
+        show_act.triggered.connect(on_show)
 
-    def run_in_thread(self):
-        """在独立线程中启动托盘"""
-        thread = threading.Thread(target=self.run, daemon=True)
-        thread.start()
-        return thread
+        settings_act = self._menu.addAction("设置")
+        settings_act.triggered.connect(on_settings)
+
+        self._menu.addSeparator()
+
+        quit_act = self._menu.addAction("退出")
+        quit_act.triggered.connect(on_quit)
+
+        self._tray.setContextMenu(self._menu)
+        self._tray.activated.connect(
+            lambda r: on_show() if r == QSystemTrayIcon.ActivationReason.Trigger else None
+        )
+        self._tray.show()
+        logger.info("Qt 系统托盘已启动")
 
     def stop(self):
-        """停止托盘"""
-        self._running = False
         if self._tray:
-            self._tray.stop()
+            self._tray.hide()
             self._tray = None
+        if self._menu:
+            self._menu.deleteLater()
+            self._menu = None
         logger.info("系统托盘已停止")
 
-    def _handle_show(self):
-        if self._on_show:
-            self._on_show()
-
-    def _handle_settings(self):
-        if self._on_settings:
-            self._on_settings()
-
-    def _handle_quit(self):
-        self.stop()
-        if self._on_quit:
-            self._on_quit()
+    def run_in_thread(self):
+        pass

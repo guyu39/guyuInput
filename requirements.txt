@@ -11,8 +11,6 @@ websocket-client>=1.6.0
 
 # 系统集成
 keyboard>=0.13.5
-pystray>=0.19.5
-pillow>=10.0.0
 
 # 离线 ASR
 sherpa-onnx>=1.10.0
