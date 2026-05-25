@@ -3,7 +3,7 @@
 右上角有关闭按钮，点击隐藏到托盘
 """
 from PySide6.QtCore import Qt, QPoint, QRectF, Signal
-from PySide6.QtGui import QPainter, QColor, QBrush, QPen, QMouseEvent
+from PySide6.QtGui import QPainter, QColor, QBrush, QMouseEvent
 from PySide6.QtWidgets import QWidget
 
 from .icons import draw_mic, draw_x
@@ -47,33 +47,22 @@ class IdleWidget(QWidget):
         painter = QPainter(self)
         painter.setRenderHint(QPainter.Antialiasing)
 
-        # 背景圆
-        if self._hovered:
-            bg = QColor(30, 41, 59, 245)
-        else:
-            bg = QColor(15, 23, 42, 235)
-        painter.setBrush(QBrush(bg))
-        painter.setPen(QPen(QColor(255, 255, 255, 30), 1))
-        r = self.width() / 2 - 2
-        painter.drawEllipse(self.rect().center(), r, r)
-
-        # 麦克风图标
+        # 麦克风图标 — 无背景，悬浮
         draw_mic(painter, self.rect().toRectF(), QColor(96, 165, 250))
 
-        # 关闭按钮 — 小圆 + X
+        # 关闭按钮
         if self._close_hovered:
             close_rect = self._close_rect()
-            painter.setBrush(QBrush(QColor(239, 68, 68, 200)))   # red-500
+            painter.setBrush(QBrush(QColor(239, 68, 68, 200)))
             painter.setPen(Qt.NoPen)
             painter.drawEllipse(close_rect.center(), CLOSE_BTN_R, CLOSE_BTN_R)
             draw_x(painter, close_rect, QColor(255, 255, 255))
         else:
-            # 半透明小圈提示可关闭
             close_rect = self._close_rect()
-            painter.setBrush(QBrush(QColor(255, 255, 255, 20)))
+            painter.setBrush(QBrush(QColor(255, 255, 255, 30)))
             painter.setPen(Qt.NoPen)
             painter.drawEllipse(close_rect.center(), CLOSE_BTN_R, CLOSE_BTN_R)
-            draw_x(painter, close_rect, QColor(255, 255, 255, 80))
+            draw_x(painter, close_rect, QColor(255, 255, 255, 100))
 
     def enterEvent(self, event):
         self._hovered = True

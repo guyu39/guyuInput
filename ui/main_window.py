@@ -89,7 +89,7 @@ class MainWindow(QMainWindow):
     def show_idle(self):
         self._update_activation(False)
         self.stack.setCurrentWidget(self.idle)
-        self._set_window_size(64, 64, circular=True)
+        self._set_window_size(64, 64)
 
     def show_recording(self, engine: str = ""):
         self._update_activation(False)
@@ -110,7 +110,7 @@ class MainWindow(QMainWindow):
         self._update_activation(False)
         self.error.set_message(message)
         self.stack.setCurrentWidget(self.error)
-        self._set_window_size(300, 44, circular=False)
+        self._set_window_size(300, 44)
         if auto_dismiss_ms > 0:
             QTimer.singleShot(auto_dismiss_ms, self.show_idle)
 
@@ -118,12 +118,12 @@ class MainWindow(QMainWindow):
         self._update_activation(True)
         self.guide.reset()
         self.stack.setCurrentWidget(self.guide)
-        self._set_window_size(480, 520, circular=False)
+        self._set_window_size(480, 520)
 
     def show_settings(self):
         self._update_activation(True)
         self.stack.setCurrentWidget(self.settings)
-        self._set_window_size(480, 580, circular=False)
+        self._set_window_size(480, 580)
 
     def update_volume(self, level: float):
         self.recording.set_volume(level)
@@ -144,17 +144,15 @@ class MainWindow(QMainWindow):
     # 内部
     # ================================================================
 
-    def _set_window_size(self, w: int, h: int, circular: bool = False):
+    def _set_window_size(self, w: int, h: int):
         self.setMinimumSize(w, h)
         self.setMaximumSize(w, h)
         self.resize(w, h)
         self.stack.setFixedSize(w, h)
 
-        if circular:
-            region = QRegion(0, 0, w, h, QRegion.Ellipse)
-            self.setMask(region)
-        else:
-            self.setMask(QRegion())
+        # 圆形窗口不设 QRegion mask — QRegion 是二值遮罩，无抗锯齿
+        # 依赖 WA_TranslucentBackground + idle widget 的 QPainter.Antialiasing 绘制圆形
+        self.setMask(QRegion())
 
         # Qt 的 setMask / resize 可能覆盖窗口样式，重新加回 WS_EX_NOACTIVATE
         self._apply_ws_ex_noactivate()
