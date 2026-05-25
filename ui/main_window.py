@@ -156,8 +156,8 @@ class MainWindow(QMainWindow):
         # 依赖 WA_TranslucentBackground + idle widget 的 QPainter.Antialiasing 绘制圆形
         self.setMask(QRegion())
 
-        # Qt 的 setMask / resize 可能覆盖窗口样式，重新加回 WS_EX_NOACTIVATE
-        self._apply_ws_ex_noactivate()
+        # Qt 的 setMask / resize 可能覆盖窗口样式，按当前页面重新同步激活状态
+        self._set_allow_activate(self._allow_activate)
 
     def _connect_signals(self):
         self.idle.clicked.connect(lambda: self.start_recording_signal.emit(-1))
@@ -192,11 +192,7 @@ class MainWindow(QMainWindow):
 
     def showEvent(self, event):
         super().showEvent(event)
-        hwnd = int(self.winId())
-        ex_style = ctypes.windll.user32.GetWindowLongW(hwnd, self.GWL_EXSTYLE)
-        ctypes.windll.user32.SetWindowLongW(
-            hwnd, self.GWL_EXSTYLE, ex_style | self.WS_EX_NOACTIVATE
-        )
+        self._set_allow_activate(self._allow_activate)
 
     def _apply_ws_ex_noactivate(self):
         """给窗口附加 WS_EX_NOACTIVATE，从 Win32 层面阻止鼠标激活"""
