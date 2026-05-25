@@ -6,7 +6,7 @@ import logging
 from typing import Callable
 
 from PySide6.QtCore import Qt, QRectF
-from PySide6.QtGui import QPainter, QPixmap, QIcon, QColor, QPen, QAction
+from PySide6.QtGui import QPainter, QPixmap, QIcon, QColor, QPen, QAction, QCursor
 from PySide6.QtWidgets import QSystemTrayIcon, QMenu
 
 logger = logging.getLogger('guyuInput')
@@ -104,12 +104,14 @@ class SystemTray:
         quit_action.triggered.connect(on_quit)
         self._menu.addAction(quit_action)
 
-        self._tray.setContextMenu(self._menu)
+        # Window 上 setContextMenu 有时不生效，手动处理 activated 信号
+        def on_activated(reason: QSystemTrayIcon.ActivationReason):
+            if reason == QSystemTrayIcon.ActivationReason.Context:
+                self._menu.popup(QCursor.pos())
+            else:
+                on_show()
 
-        # 左键激活 → 显示窗口；右键 → 仅显示菜单（不额外触发显示）
-        self._tray.activated.connect(
-            lambda reason: on_show() if reason == QSystemTrayIcon.ActivationReason.Trigger else None
-        )
+        self._tray.activated.connect(on_activated)
 
         self._tray.show()
         logger.info("Qt 系统托盘已启动")
