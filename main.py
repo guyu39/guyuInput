@@ -102,7 +102,7 @@ def main():
     tray = SystemTray()
     tray.setup(
         on_show=on_tray_show,
-        on_settings=lambda: (on_tray_show(), window.show_settings()),
+        on_settings=lambda: (window.show_settings(), on_tray_show()),
         on_quit=on_tray_quit,
     )
 

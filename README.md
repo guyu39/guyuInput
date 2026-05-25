@@ -2,6 +2,9 @@
 
 Windows 智能语音输入法 — 单按热键说话，再按停止识别，文字自动注入到任意应用。
 
+## 在线演示
+https://www.bilibili.com/video/BV1DUGR63E91/?vd_source=778dabe0d4d393576050e453840f59a8
+
 ## 功能特性
 
 - **单按切换录音**：全局热键（默认 `Ctrl+Alt+V`），按一次开始录音，再按一次停止并注入文本
